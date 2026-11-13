@@ -102,11 +102,32 @@
       var body = light ? r.slice(1) : r;
       var tone = "", last = body.charAt(body.length - 1);
       if ("ˊˇˋ".indexOf(last) >= 0) { tone = last; body = body.slice(0, -1); }
-      var col = (light ? '<i class="lt">˙</i>' : "") + body.split("").map(function (s) { return "<i>" + s + "</i>"; }).join("");
-      out += '<span class="zy"><span class="h">' + c + '</span><span class="b"><span class="col">' + col + "</span>" +
-        (tone ? '<span class="tn">' + tone + "</span>" : "") + "</span></span>";
+      // 調號自己畫（不靠字型），固定標在最後一個注音符號的右上方
+      var syms = body.split("");
+      var col = (light ? '<i class="lt">˙</i>' : "") + syms.map(function (s, j) {
+        return "<i>" + s + (tone && j === syms.length - 1 ? toneSvg(tone, syms.length === 1) : "") + "</i>";
+      }).join("");
+      out += '<span class="zy"><span class="h">' + c + '</span><span class="b' + (tone ? " t" : "") + '"><span class="col">' + col + "</span></span></span>";
     }
     return out;
+  }
+  // 調號圖形（10×10 座標）：ˊ 由左下往右上、ˋ 由左上往右下、ˇ 為 V 形
+  var TONE_PATH = { "ˊ": [[3, 9], [7, 1]], "ˋ": [[3, 1], [7, 9]], "ˇ": [[2.2, 1.5], [5, 8.5], [7.8, 1.5]] };
+  function toneSvg(t, single) {
+    var pts = TONE_PATH[t].map(function (p) { return p.join(","); }).join(" ");
+    return '<svg class="tn' + (single ? " one" : "") + '" viewBox="0 0 10 10" aria-hidden="true"><polyline points="' + pts + '"/></svg>';
+  }
+  function toneDraw(ctx, t, cx, cy, s) { // 以 (cx,cy) 為中心、邊長 s 畫調號
+    var pts = TONE_PATH[t];
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = s * 0.15; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.beginPath();
+    for (var i = 0; i < pts.length; i++) {
+      var px = cx + (pts[i][0] - 5) / 10 * s, py = cy + (pts[i][1] - 5) / 10 * s;
+      if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+    }
+    ctx.stroke();
+    ctx.restore();
   }
   // 在畫布上畫有注音的文字（站牌、集點卡用）
   function zyMeasure(ctx, text, size) {
@@ -133,7 +154,8 @@
       var cx = x + size * 1.13, k = 0;
       if (light) { ctx.fillText("˙", cx, top); k++; }
       for (var j = 0; j < body.length; j++, k++) ctx.fillText(body[j], cx, top + k * zs * 1.02);
-      if (tone) ctx.fillText(tone, cx + zs * 0.75, top + (k - 1) * zs * 1.02 - zs * 0.35);
+      // 調號：最後一個符號的右上方（多個符號時在最後兩個符號交界處的右側）
+      if (tone) toneDraw(ctx, tone, cx + zs * 0.68, top + (k - 1) * zs * 1.02 - zs * (body.length === 1 ? 0.3 : 0.55), zs * 0.45);
       ctx.textAlign = "left";
       x += size * 1.42;
     }
