@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>三玉社區踏查地圖</title>
+<style>
+  :root {
+    --ink: #3b2f2a;
+    --paper: #fffaf0;
+    --accent: #e8704a;
+    --ok: #3f9b5f;
+    --bad: #d9534f;
+    --sun: #f6c445;
+    --shadow: 0 6px 0 rgba(59, 47, 42, .18);
+    font-size: 17px;
+  }
+  body.big { font-size: 24px; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfe9ff; color: var(--ink);
+    font-family: "Iansui", "jf-openhuninn", "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", sans-serif; }
+  #scene { position: fixed; inset: 0; touch-action: none; }
+  button { font: inherit; color: inherit; cursor: pointer; border: none; }
+
+  /* 上方：標題與印章 */
+  #top { position: fixed; top: 0; left: 0; right: 0; padding: calc(env(safe-area-inset-top) + .5rem) .8rem .5rem;
+    display: flex; align-items: center; gap: .6rem; pointer-events: none; }
+  #title { background: var(--paper); border-radius: 1rem; padding: .35rem .9rem; box-shadow: var(--shadow); pointer-events: auto; }
+  #title b { font-size: 1.25rem; display: block; line-height: 1.6; }
+  #title small { opacity: .7; font-size: .75rem; }
+  #stamps { display: flex; gap: .3rem; background: var(--paper); border-radius: 1rem; padding: .35rem .5rem;
+    box-shadow: var(--shadow); pointer-events: auto; flex-wrap: wrap; }
+  .stamp { width: 2.1rem; height: 2.1rem; border-radius: 50%; border: 2px dashed #c9b9a6; display: grid; place-items: center;
+    font-size: 1.1rem; filter: grayscale(1); opacity: .35; transition: all .3s; }
+  .stamp.done { border: 2px solid var(--accent); background: #fff0e6; filter: none; opacity: 1; transform: rotate(-8deg); }
+  #tools { margin-left: auto; display: flex; gap: .4rem; pointer-events: auto; }
+  .round { width: 2.8rem; height: 2.8rem; border-radius: 50%; background: var(--paper); box-shadow: var(--shadow); font-size: 1.3rem; }
+  .round.on { background: var(--sun); }
+
+  /* 下方：主要按鈕 */
+  #bottom { position: fixed; left: 0; right: 0; bottom: 0; padding: .8rem .8rem calc(env(safe-area-inset-bottom) + 1rem);
+    display: flex; justify-content: center; gap: .6rem; pointer-events: none; }
+  #goBtn { pointer-events: auto; background: var(--accent); color: #fff; font-size: 1.35rem; font-weight: bold;
+    padding: .9rem 1.8rem; border-radius: 2rem; box-shadow: 0 6px 0 #b4502f; min-width: 14rem; }
+  #goBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b4502f; }
+  #goBtn:disabled { background: #b9aa9a; box-shadow: 0 6px 0 #8f8172; }
+  #viewBtn { pointer-events: auto; }
+
+  /* 任務卡 */
+  #card { position: fixed; inset: 0; display: none; align-items: flex-end; justify-content: center;
+    background: rgba(40, 30, 20, .35); z-index: 10; }
+  #card.show { display: flex; }
+  #sheet { background: var(--paper); width: min(46rem, 100%); max-height: 88vh; overflow-y: auto; border-radius: 1.6rem 1.6rem 0 0;
+    padding: 1.1rem 1.3rem calc(env(safe-area-inset-bottom) + 1.4rem); box-shadow: 0 -6px 30px rgba(0,0,0,.2);
+    animation: up .3s ease-out; }
+  @keyframes up { from { transform: translateY(40%); opacity: .3; } }
+  #sheetHead { display: flex; align-items: center; gap: .6rem; margin-bottom: .6rem; }
+  #sheetHead .big { font-size: 2.2rem; }
+  #sheetHead h2 { margin: 0; font-size: 1.4rem; }
+  #dots { margin-left: auto; display: flex; gap: .3rem; }
+  .dot { width: .7rem; height: .7rem; border-radius: 50%; background: #e2d6c6; }
+  .dot.cur { background: var(--accent); }
+  .dot.ok { background: var(--ok); }
+  .tag { display: inline-block; font-size: .8rem; padding: .15rem .6rem; border-radius: 1rem; color: #fff; margin-bottom: .4rem; }
+  .tag.生活 { background: #4f9a6b; } .tag.數學 { background: #4a7fc1; } .tag.國語 { background: #c4584a; }
+  .q { font-size: 1.3rem; line-height: 1.6; margin: .2rem 0 .8rem; display: flex; gap: .5rem; align-items: flex-start; }
+  .speak { flex: none; width: 2.4rem; height: 2.4rem; border-radius: 50%; background: #fff0d9; font-size: 1.1rem; }
+  .opts { display: grid; gap: .6rem; }
+  .opt { text-align: left; background: #fff; border: 3px solid #eadfce; border-radius: 1rem; padding: .8rem 1rem;
+    font-size: 1.2rem; line-height: 1.5; }
+  .opt.right { border-color: var(--ok); background: #e7f6eb; }
+  .opt.wrong { border-color: var(--bad); background: #fdeceb; animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+  .why { margin-top: .8rem; padding: .7rem 1rem; border-radius: 1rem; background: #e7f6eb; font-size: 1.1rem; line-height: 1.6; }
+  .why.hint { background: #fff4d6; }
+  .next { margin-top: 1rem; width: 100%; background: var(--ok); color: #fff; font-size: 1.3rem; font-weight: bold;
+    padding: .8rem; border-radius: 1.2rem; box-shadow: 0 5px 0 #2c7246; }
+  .groups { display: flex; flex-wrap: wrap; gap: .5rem; margin: .3rem 0 .9rem; }
+  .group { background: #fff; border: 2px dashed #d8c9b5; border-radius: .9rem; padding: .35rem .5rem; font-size: 1.4rem; letter-spacing: .1rem; }
+  .step { font-size: .95rem; opacity: .75; margin-bottom: .3rem; }
+  .eq { font-size: 1.5rem; text-align: center; font-weight: bold; }
+
+  /* 排順序 */
+  .slots { display: grid; gap: .45rem; margin-bottom: .9rem; }
+  .slot { display: flex; align-items: center; gap: .6rem; min-height: 3rem; border-radius: .9rem; border: 2px dashed #d8c9b5;
+    padding: .4rem .7rem; background: #fff; font-size: 1.15rem; }
+  .slot .n { width: 1.7rem; height: 1.7rem; border-radius: 50%; background: #eadfce; display: grid; place-items: center; font-size: .9rem; flex: none; }
+  .slot.filled { border-style: solid; border-color: var(--ok); }
+  .slot .lb { font-size: .8rem; color: #fff; background: var(--accent); border-radius: .6rem; padding: .1rem .5rem; flex: none; }
+  .pieces { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .piece { background: #fff3e0; border: 2px solid #f0c98f; border-radius: .9rem; padding: .55rem .8rem; font-size: 1.15rem; }
+  .piece.wrong { border-color: var(--bad); background: #fdeceb; animation: shake .35s; }
+
+  /* 信紙 */
+  .who { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: .5rem; }
+  .letter { background: repeating-linear-gradient(#fffdf7, #fffdf7 2.35rem, #e9d9c3 2.35rem, #e9d9c3 2.45rem);
+    border: 2px solid #e3cfb3; border-radius: .6rem; padding: .6rem 1.2rem 1rem; font-size: 1.25rem; line-height: 2.45rem; margin: .6rem 0; }
+  .letter .ind { padding-left: 2.5em; }
+  .letter .right { text-align: right; }
+  .letter input { font: inherit; border: none; border-bottom: 2px solid var(--accent); background: transparent; width: 7em; text-align: center; }
+  .note { font-size: .9rem; opacity: .75; line-height: 1.5; }
+
+  /* 拿到印章 */
+  #toast { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%) scale(.6); opacity: 0; pointer-events: none;
+    background: var(--paper); border: 4px solid var(--accent); border-radius: 1.5rem; padding: 1rem 2rem; text-align: center;
+    font-size: 1.4rem; font-weight: bold; transition: all .35s; z-index: 20; box-shadow: var(--shadow); }
+  #toast.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  #toast .big { font-size: 3.5rem; display: block; }
+
+  /* 設定選單 */
+  #menu { position: fixed; top: 4.6rem; max-height: 80vh; overflow-y: auto; right: .8rem; background: var(--paper); border-radius: 1rem; box-shadow: var(--shadow);
+    padding: .6rem; display: none; z-index: 5; width: 16rem; }
+  #menu.show { display: block; }
+  #menu button { display: block; width: 100%; text-align: left; padding: .6rem .7rem; border-radius: .7rem; background: transparent; font-size: 1rem; }
+  #menu button:hover { background: #f4ead9; }
+  #menu .jump { padding-left: 1.4rem; font-size: .95rem; }
+  #menu hr { border: none; border-top: 1px solid #eadfce; margin: .3rem 0; }
+
+  /* 注音：國字右側直排 */
+  .zy { display: inline-flex; align-items: center; vertical-align: middle; margin-right: .04em; line-height: 1; }
+  .zy .h { display: inline-block; }
+  .zy .b { display: inline-flex; align-items: center; font-size: .36em; margin-left: .06em; position: relative; }
+  .zy .col { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.02; }
+  .zy .col i { font-style: normal; display: block; }
+  .zy .col i.lt { line-height: .7; }
+  .zy .tn { display: inline-block; margin-left: .02em; transform: translateY(-.15em); }
+  .q, .opt, .why, .piece, .slot, .letter, .sortCard, .ccard, .bin, .look { line-height: 2.1; }
+  #goBtn .zy .b, #title .zy .b { font-size: .32em; }
+  body.nozy .zy .b { display: none; }
+
+  .photo { height: 9rem; margin: -1.1rem -1.3rem .8rem; border-radius: 1.6rem 1.6rem 0 0; background: center / cover no-repeat; }
+  .look { background: #fff6d6; border-radius: 1rem; padding: .4rem .9rem; margin-bottom: .8rem; font-size: 1.05rem; display: flex; gap: .5rem; align-items: center; }
+  .next.gray { background: #b9aa9a; box-shadow: 0 5px 0 #8f8172; }
+
+  /* 小遊戲 */
+  .intro { text-align: center; padding: .4rem 0; }
+  .intro h3 { font-size: 1.5rem; margin: .2rem 0 .6rem; }
+  .intro .q { text-align: left; }
+  .introIcon { font-size: 3.4rem; animation: bob 1.4s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-8px); } }
+  .gtitle { font-weight: bold; font-size: 1.25rem; margin: .1rem 0 .5rem; }
+  .bar { height: .9rem; background: #eadfce; border-radius: 1rem; overflow: hidden; margin-bottom: .8rem; }
+  .bar .fill { height: 100%; width: 0; background: var(--ok); transition: width .35s; }
+  .sortStage { height: 7.5rem; display: grid; place-items: center; }
+  .sortCard { background: #fff; border: 3px solid #f0c98f; border-radius: 1.1rem; padding: .7rem 1.4rem; font-size: 1.45rem; box-shadow: var(--shadow); transition: transform .35s, opacity .35s; }
+  .sortCard.flyL { transform: translate(-40%, 90%) scale(.4); opacity: 0; }
+  .sortCard.flyR { transform: translate(40%, 90%) scale(.4); opacity: 0; }
+  .sortCard.wrong { border-color: var(--bad); animation: shake .35s; }
+  .bins { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+  .bin { background: #fff; border: 3px solid #eadfce; border-radius: 1.2rem; padding: .7rem .4rem; font-size: 1.15rem; display: flex; flex-direction: column; align-items: center; gap: .2rem; }
+  .bin .be { font-size: 2.2rem; line-height: 1.2; }
+  .bin.pop, .tg.pop { animation: pop .4s; }
+  @keyframes pop { 50% { transform: scale(1.25); } }
+  .why.done { text-align: center; font-size: 1.25rem; }
+  .stars { display: block; font-size: 2rem; }
+  .track { position: relative; height: 3.6rem; background: linear-gradient(#d7ecc6, #d7ecc6) center / 100% .5rem no-repeat; margin: .2rem 0 .6rem; }
+  .track span { position: absolute; top: .1rem; font-size: 2.6rem; transition: left .6s; }
+  .cop { left: 8%; } .thief { left: 84%; }
+  .cgrid { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
+  .ccard { position: relative; background: #fff; border: 3px solid #eadfce; border-radius: 1rem; padding: .6rem .7rem; font-size: 1.1rem; text-align: left; min-height: 4.2rem; }
+  .ccard.caught { border-color: var(--bad); background: #fdeceb; }
+  .ccard.good { border-color: var(--ok); background: #e7f6eb; }
+  .ccard .badge { position: absolute; right: .3rem; top: .1rem; font-size: 1.3rem; }
+  .combo { display: flex; align-items: center; justify-content: center; gap: .5rem; font-size: 1.8rem; margin: .4rem 0 .8rem; flex-wrap: wrap; }
+  .combo .slotc { width: 3.6rem; height: 3.6rem; border: 3px dashed #d8c9b5; border-radius: 1rem; display: grid; place-items: center; background: #fff; color: #b9aa9a; }
+  .combo .slotc.on { border: 3px solid var(--accent); color: var(--ink); background: #fff0e6; animation: pop .4s; }
+  .combo .res { opacity: .25; font-weight: bold; transition: opacity .4s; }
+  .combo .res.on { opacity: 1; color: var(--accent); }
+  .ccard.wrong { border-color: var(--bad); animation: shake .35s; }
+  .targets { display: flex; justify-content: center; gap: 1rem; font-size: 2.8rem; margin: .2rem 0 .6rem; }
+  .tg { display: inline-block; }
+
+  /* 老師照片設定 */
+  #photoPanel { position: fixed; inset: 0; background: rgba(40,30,20,.35); display: none; place-items: center; z-index: 30; }
+  #photoPanel.show { display: grid; }
+  #photoBox { background: var(--paper); border-radius: 1.4rem; width: min(34rem, 94vw); max-height: 88vh; overflow-y: auto; padding: 1.1rem 1.2rem; }
+  #photoBox h3 { margin: 0 0 .3rem; }
+  .prow { display: flex; align-items: center; gap: .6rem; padding: .45rem 0; border-bottom: 1px solid #eadfce; }
+  .pthumb { width: 3.6rem; height: 2.7rem; border-radius: .5rem; background: #f1e8da center / cover no-repeat; display: grid; place-items: center; font-size: 1.4rem; flex: none; }
+  .pname { flex: 1; }
+  .pbtn { background: var(--accent); color: #fff; border-radius: .8rem; padding: .4rem .8rem; font-size: .95rem; cursor: pointer; }
+  .pbtn.gray { background: #b9aa9a; }
+  .pbtn input { display: none; }
+  .prow2 { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; background: var(--paper); padding: 2rem; text-align: center; z-index: 50; }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div id="top">
+  <div id="title"><b id="titleText">社區踏查</b><small id="subText"></small></div>
+  <div id="stamps"></div>
+  <div id="tools">
+    <button class="round" id="menuBtn" aria-label="設定">⚙️</button>
+  </div>
+</div>
+
+<div id="menu">
+  <button id="bigBtn">🖥️ 大屏模式（字放大）</button>
+  <button id="zyBtn">ㄅ 注音</button>
+  <button id="photoBtn">📷 換上照片（老師設定）</button>
+  <button id="teacherBtn">🔓 老師模式（每站都能去）</button>
+  <div id="jumpList"></div>
+  <hr>
+  <button id="resetBtn">🔄 重新開始</button>
+</div>
+
+<div id="bottom">
+  <button class="round" id="viewBtn" aria-label="看全圖">🗺️</button>
+  <button id="goBtn">▶ 出發</button>
+</div>
+
+<div id="card"><div id="sheet"></div></div>
+<div id="toast"></div>
+<div id="photoPanel"><div id="photoBox">
+  <h3>📷 換上照片</h3>
+  <p class="note">每個地點可以換上你們班實際拍的照片。照片只存在這台裝置；要放到學生的平板，先「匯出設定檔」，再到學生平板「匯入設定檔」。請避開拍到學生的臉。</p>
+  <div id="photoList"></div>
+  <div class="prow2">
+    <button class="pbtn" id="exportBtn">⬇️ 匯出設定檔</button>
+    <label class="pbtn">⬆️ 匯入設定檔<input type="file" id="importInput" accept="application/json,.json"></label>
+    <button class="pbtn gray" id="photoClose">關閉</button>
+  </div>
+  <p class="note" id="photoMsg"></p>
+</div></div>
+<div id="err">這台裝置無法顯示 3D 畫面（WebGL）。<br>請改用較新的瀏覽器開啟。</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="data/tour.js"></script>
+<script src="js/zhuyin.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
