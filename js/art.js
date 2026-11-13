@@ -33,25 +33,37 @@ window.ART = (function () {
       eyes(44, 42, 58, pose === "cheer") + blush(52) + smile(53));
   };
 
-  /* 警察 */
-  A.police = function () {
-    return svg("0 0 100 110", shadow(50, 104, 28) +
+  /* 警察：mood＝happy（預設）、run（追）、whistle（吹哨）、proud（抓到了） */
+  A.police = function (mood) {
+    var face = eyes(48, 42, 58, mood === "proud") + (mood === "whistle"
+      ? '<circle cx="50" cy="58" r="4" fill="' + K + '"/><rect x="50" y="55" width="14" height="6" rx="2" fill="#E5E7EB" ' + s3 + '/>'
+      : mood === "run" ? '<path d="M43 56 L57 56" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/><path d="M34 40 L44 42 M66 40 L56 42" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/>'
+      : smile(56)) + (mood === "proud" ? blush(54) : "");
+    var legs = mood === "run"
+      ? '<path d="M38 98 L28 106 M62 98 L74 104" ' + S + ' stroke-linecap="round" fill="none"/>' : "";
+    return svg("0 0 100 110", shadow(50, 104, 28) + legs +
       '<path d="M24 64 Q50 54 76 64 L78 100 Q50 105 22 100 Z" fill="#7DB4E6" ' + S + "/>" +
       '<path d="M46 62 L50 82 L54 62 Z" fill="#1E3A6E" ' + s3 + "/>" +
       '<circle cx="50" cy="42" r="21" fill="' + SKIN + '" ' + S + "/>" +
       '<path d="M26 30 Q50 6 74 30 L74 34 L26 34 Z" fill="#1E3A6E" ' + S + "/>" +
       '<path d="M22 34 L78 34 L72 40 L28 40 Z" fill="#14284D" ' + s3 + "/>" +
-      '<circle cx="50" cy="24" r="5" fill="#FACC15" ' + s3 + "/>" +
-      eyes(48, 42, 58) + smile(56) +
+      '<circle cx="50" cy="24" r="5" fill="#FACC15" ' + s3 + "/>" + face +
       '<rect x="62" y="74" width="10" height="7" rx="2" fill="#FACC15" ' + s3 + "/>");
   };
 
-  /* 壞蛋：毛帽、黑眼罩、條紋衣，背著袋子；caught＝被手銬銬住 */
-  A.thief = function (caught) {
+  /* 小偷：mood＝smug（得意）、worried（緊張）、caught（被銬住）；舊的 true／false 也可以用 */
+  A.thief = function (mood) {
+    if (mood === true) mood = "caught";
+    if (!mood) mood = "smug";
+    var caught = mood === "caught";
     var cuffs = caught ? '<circle cx="40" cy="88" r="7" fill="none" stroke="#9CA3AF" stroke-width="4"/><circle cx="60" cy="88" r="7" fill="none" stroke="#9CA3AF" stroke-width="4"/><path d="M47 88 L53 88" stroke="#9CA3AF" stroke-width="4"/>' : "";
+    var sweat = '<path d="M72 28 Q76 36 72 40 Q68 36 72 28 Z" fill="#7DD3FC" stroke="' + K + '" stroke-width="2"/>';
+    var mask = '<path d="M28 38 Q50 32 72 38 L70 48 Q50 44 30 48 Z" fill="' + K + '"/>';
     var face = caught
-      ? '<path d="M38 40 L44 46 M44 40 L38 46 M56 40 L62 46 M62 40 L56 46" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/><path d="M42 56 Q50 51 58 56" fill="none" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/><path d="M70 30 Q74 38 70 42 Q66 38 70 30 Z" fill="#7DD3FC" stroke="' + K + '" stroke-width="2"/>'
-      : '<path d="M28 38 Q50 32 72 38 L70 48 Q50 44 30 48 Z" fill="' + K + '"/><circle cx="41" cy="42" r="3" fill="#fff"/><circle cx="59" cy="42" r="3" fill="#fff"/><path d="M42 56 Q50 60 58 54" fill="none" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/>';
+      ? '<path d="M38 40 L44 46 M44 40 L38 46 M56 40 L62 46 M62 40 L56 46" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/><path d="M42 57 Q50 51 58 57" fill="none" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/>' + sweat
+      : mood === "worried"
+        ? mask + '<circle cx="41" cy="43" r="3.5" fill="#fff"/><circle cx="59" cy="43" r="3.5" fill="#fff"/><ellipse cx="50" cy="57" rx="4" ry="3" fill="' + K + '"/>' + sweat
+        : mask + '<path d="M38 42 L44 42 M56 42 L62 42" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M42 54 Q52 60 60 52" fill="none" stroke="' + K + '" stroke-width="3" stroke-linecap="round"/>';
     var sack = caught ? "" : '<path d="M70 58 Q92 50 90 76 Q80 86 68 76 Z" fill="#C8A26B" ' + S + '/><path d="M72 58 L76 52" ' + s3 + "/>";
     return svg("0 0 100 110", shadow(50, 104, 28) + sack +
       '<path d="M24 64 Q50 54 76 64 L78 100 Q50 105 22 100 Z" fill="#F3F4F6" ' + S + "/>" +
@@ -110,7 +122,7 @@ window.ART = (function () {
 
   /* 郵筒（紅、綠） */
   A.mailbox = function (color) {
-    var c = color === "green" ? "#2F8A4F" : "#D8392B";
+    var c = color === "green" ? "#2F8A4F" : color === "blue" ? "#3B6FB6" : "#D8392B";
     return svg("0 0 100 110", shadow(50, 104, 26) +
       '<rect x="40" y="80" width="20" height="22" fill="#6B7280" ' + S + "/>" +
       '<path d="M24 82 L24 40 Q24 14 50 14 Q76 14 76 40 L76 82 Z" fill="' + c + '" ' + S + "/>" +
@@ -170,6 +182,12 @@ window.ART = (function () {
   A.orange = function () { return svg("0 0 40 40", '<circle cx="20" cy="22" r="15" fill="#FB923C" stroke="' + K + '" stroke-width="3"/><path d="M20 7 Q26 2 30 6 Q24 10 20 7 Z" fill="#4F9A55" stroke="' + K + '" stroke-width="2"/>'); };
   A.coin = function () { return svg("0 0 40 40", '<circle cx="20" cy="20" r="16" fill="#FACC15" stroke="' + K + '" stroke-width="3"/><circle cx="20" cy="20" r="10" fill="none" stroke="#CA8A04" stroke-width="2"/>'); };
   A.book = function () { return svg("0 0 40 40", '<rect x="7" y="5" width="26" height="30" rx="3" fill="#E5484D" stroke="' + K + '" stroke-width="3"/><rect x="11" y="10" width="16" height="6" rx="1" fill="#fff"/>'); };
+
+  A.drop = function () { return svg("0 0 40 40", '<path d="M20 4 Q32 20 30 27 Q28 36 20 36 Q12 36 10 27 Q8 20 20 4 Z" fill="#7DD3FC" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/>'); };
+  A.helmet = function () { return svg("0 0 40 40", '<path d="M6 26 Q6 8 20 8 Q34 8 34 26 Z" fill="#DC2626" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/><path d="M3 26 L37 26 L37 31 L3 31 Z" fill="#B91C1C" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/><rect x="16" y="13" width="8" height="8" fill="#FACC15" stroke="' + K + '" stroke-width="2"/>'); };
+  A.leaf = function () { return svg("0 0 40 40", '<rect x="17" y="24" width="6" height="12" fill="#8A6142" stroke="' + K + '" stroke-width="2.5"/><circle cx="20" cy="17" r="13" fill="#4F9A55" stroke="' + K + '" stroke-width="3"/>'); };
+  A.flower = function () { return svg("0 0 40 40", '<path d="M20 22 L20 38" stroke="#16A34A" stroke-width="3"/><circle cx="20" cy="10" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="12" cy="17" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="28" cy="17" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="20" cy="22" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="20" cy="16" r="4" fill="#FACC15" stroke="' + K + '" stroke-width="2"/>'); };
+  A.cross = function () { return svg("0 0 40 40", '<circle cx="20" cy="20" r="17" fill="#EF4444" stroke="' + K + '" stroke-width="3"/><path d="M13 13 L27 27 M27 13 L13 27" stroke="#fff" stroke-width="5" stroke-linecap="round"/>'); };
 
   /* 小圖示 */
   A.star = function (on) { return svg("0 0 40 40", '<path d="M20 3 L25 15 L38 15 L28 23 L32 36 L20 28 L8 36 L12 23 L2 15 L15 15 Z" fill="' + (on === false ? "#E5E7EB" : "#FACC15") + '" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/>'); };

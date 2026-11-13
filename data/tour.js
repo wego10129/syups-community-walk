@@ -12,8 +12,10 @@
  *   math   ：乘法情境題，先選列式、再選答案；per = 每一份幾個，groups = 幾份
  *   order  ：依序點選，items 依「正確順序」填寫，畫面會打亂
  *   sort   ：分類小遊戲，一次出現一張卡，點正確的籃子
- *   catch  ：找出不對的行為，找到越多，警察越接近壞蛋
- *   run    ：連續答題小遊戲，每答對一題，畫面上一個圖示會變化（例如火被澆熄）
+ *   chase  ：警察追小偷，一次一件事，判斷可以／不可以；答對警察前進，答錯小偷逃遠，答錯的題目稍後再出一次
+ *   run    ：看圖列式小遊戲，每答對一題，畫面上一個圖示會變化（例如火被澆熄）
+ *            乘法寫法：被乘數（一份有幾個，per）在前，乘數（有幾份，groups）在後；
+ *            題目會刻意用兩種說法（先說份數／先說一份幾個），選項含前後對調的算式
  *   小遊戲的角色與圖案（host、before、after、art、item）都畫在 js/art.js
  *   pick2  ：從選項中選出兩個（地名挑戰：三角埔＋玉潮坑溪＝三玉）
  *   letter ：最後的寫信任務
@@ -112,7 +114,7 @@ window.TOUR = {
         {
           type: "math",
           subject: "數學",
-          story: "假設廟裡的供桌上，每一盤放五顆橘子，一共擺了四盤。",
+          story: "假設廟裡的供桌上擺了四盤橘子，每一盤放五顆。",
           item: "orange",
           per: 5,
           groups: 4,
@@ -142,16 +144,15 @@ window.TOUR = {
           type: "run",
           subject: "數學",
           title: "幫行員數硬幣",
-          story: "銀行裡有好多五元硬幣！每答對一題，就能把硬幣存進一個小豬撲滿。",
+          story: "銀行裡有好多五元硬幣！先看圖，選出正確的乘法算式，就能把硬幣存進小豬撲滿。",
           host: "banker",
           before: "pig",
           after: "pigFull",
-          unit: "元",
           rounds: [
-            { q: "有三個五元硬幣，一共幾元？", per: 5, groups: 3 },
-            { q: "有六個五元硬幣，一共幾元？", per: 5, groups: 6 },
-            { q: "有四個五元硬幣，一共幾元？", per: 5, groups: 4 },
-            { q: "有八個五元硬幣，一共幾元？", per: 5, groups: 8 }
+            { q: "一個硬幣是五元，有三個硬幣，一共幾元？", item: "coin", per: 5, groups: 3, unit: "元" },
+            { q: "有六個五元硬幣，一共幾元？", item: "coin", per: 5, groups: 6, unit: "元" },
+            { q: "小美存了四個五元硬幣，一共幾元？", item: "coin", per: 5, groups: 4, unit: "元" },
+            { q: "每個硬幣五元，存了七個，一共幾元？", item: "coin", per: 5, groups: 7, unit: "元" }
           ]
         }
       ]
@@ -176,40 +177,41 @@ window.TOUR = {
         {
           type: "sort",
           subject: "國語",
-          title: "幫郵差分類信件",
-          story: "郵差叔叔的信件碎片混在一起了！信的開頭是「稱謂」，結尾是「祝福語」。一起來幫他快速分類好吧！",
+          title: "幫郵差分類郵件",
+          story: "郵差叔叔的郵件混在一起了！想一想，要說「一封」、「一張」還是「一個」，再把郵件放進對的郵筒。",
           host: "postman",
           card: "envelope",
           bins: [
-            { name: "開頭：稱謂", art: "mailboxRed" },
-            { name: "結尾：祝福語", art: "mailboxGreen" }
+            { name: "一封", art: "mailboxRed" },
+            { name: "一張", art: "mailboxGreen" },
+            { name: "一個", art: "mailboxBlue" }
           ],
           items: [
-            { text: "親愛的奶奶：", bin: 0 },
-            { text: "祝您　身體健康", bin: 1 },
-            { text: "敬愛的老師：", bin: 0 },
-            { text: "祝您　平安快樂", bin: 1 },
-            { text: "親愛的郵差叔叔：", bin: 0 },
-            { text: "祝你　天天開心", bin: 1 }
+            { text: "信", bin: 0 },
+            { text: "郵票", bin: 1 },
+            { text: "包裹", bin: 2 },
+            { text: "感謝信", bin: 0 },
+            { text: "明信片", bin: 1 },
+            { text: "紙箱", bin: 2 }
           ]
         },
         {
           type: "order",
           subject: "國語",
-          q: "把一封信的各個部分，照順序排好！",
+          q: "把詞語排成通順的句子！",
+          hint: "先唸唸看：是誰？在什麼時候？做什麼事？",
           items: [
-            { label: "稱謂", text: "親愛的郵差叔叔：" },
-            { label: "問候", text: "您好！" },
-            { label: "正文", text: "謝謝您每天幫大家送信。" },
-            { label: "祝福語", text: "祝您　平安快樂" },
-            { label: "署名", text: "小明　敬上" },
-            { label: "日期", text: "十一月二十日" }
+            { text: "郵差叔叔" },
+            { text: "每天早上" },
+            { text: "騎著機車" },
+            { text: "把信" },
+            { text: "送到我家。" }
           ]
         },
         {
           type: "math",
           subject: "數學",
-          story: "假設一張郵票要六元，小明要買三張郵票。",
+          story: "小明要買三張郵票，假設一張郵票要六元。",
           item: "coin",
           per: 6,
           groups: 3,
@@ -228,23 +230,21 @@ window.TOUR = {
       lookFor: "到現場找找看：派出所門口停了什麼交通工具？",
       tasks: [
         {
-          type: "catch",
+          type: "chase",
           subject: "生活",
-          title: "警察抓壞蛋",
+          title: "警察追小偷",
           host: "police",
-          story: "警察叔叔要來抓壞蛋了！找出「不對的行為」，每找到一個，警察就離壞蛋更近一步。",
+          story: "小偷在社區裡溜來溜去！每看到一件事，判斷「可以」還是「不可以」。答對了，警察就往前追一步；答錯了，小偷就逃遠一步。",
           items: [
-            { text: "隨便摸別人的身體", bad: true },
-            { text: "別人說不要，就停下來", bad: false },
-            { text: "掀別人的裙子", bad: true },
-            { text: "不舒服的時候，大聲說「不要」", bad: false },
-            { text: "沒問過就拍別人的照片", bad: true },
-            { text: "遇到怪怪的事，告訴老師或爸媽", bad: false },
-            { text: "叫別人保守讓人不舒服的秘密", bad: true },
-            { text: "在走廊上推擠同學", bad: true }
+            { text: "隨便摸別人的身體", ok: false, why: "身體是自己的，別人不可以隨便碰。" },
+            { text: "別人說「不要」，就停下來", ok: true, why: "尊重別人的感覺。" },
+            { text: "掀別人的裙子", ok: false, why: "這會讓人很不舒服，不可以。" },
+            { text: "不舒服的時候，大聲說「不要」", ok: true, why: "保護自己，說出來。" },
+            { text: "沒問過就拍別人的照片", ok: false, why: "拍照前要先問別人可不可以。" },
+            { text: "遇到怪怪的事，告訴老師或爸媽", ok: true, why: "信任的大人會幫忙。" },
+            { text: "叫別人保守讓人不舒服的秘密", ok: false, why: "讓人不舒服的秘密，要告訴大人。" },
+            { text: "在走廊上推擠同學", ok: false, why: "推擠很危險，會讓人受傷。" }
           ],
-          goodNote: "這是對的做法喔！",
-          badNote: "抓到了！這是不對的行為。",
           end: "我們的身體是自己的，別人不可以隨便碰。遇到不舒服的事，要說「不要」，然後告訴信任的大人。"
         },
         {
@@ -278,16 +278,15 @@ window.TOUR = {
           type: "run",
           subject: "數學",
           title: "幫消防員滅火",
-          story: "社區裡有四團火！每答對一題乘法，消防員就能澆熄一團火。",
+          story: "社區裡有四團火！看圖選出正確的乘法算式，消防員就能澆熄一團火。",
           host: "firefighter",
           before: "fire",
           after: "smoke",
-          unit: "",
           rounds: [
-            { per: 6, groups: 3 },
-            { per: 4, groups: 5 },
-            { per: 3, groups: 7 },
-            { per: 8, groups: 2 }
+            { q: "有三桶水，每桶裝六瓢水，一共幾瓢？", item: "drop", per: 6, groups: 3, unit: "瓢" },
+            { q: "每輛消防車坐四位消防員，來了五輛，一共幾位？", item: "helmet", per: 4, groups: 5, unit: "位" },
+            { q: "有七條水管，每條接三個噴頭，一共幾個噴頭？", item: "drop", per: 3, groups: 7, unit: "個" },
+            { q: "有兩輛消防車，每輛載八捲水管，一共幾捲？", item: "drop", per: 8, groups: 2, unit: "捲" }
           ]
         }
       ]
@@ -369,16 +368,15 @@ window.TOUR = {
           type: "run",
           subject: "數學",
           title: "幫公園種樹",
-          story: "公園想多種一些樹！每答對一題乘法，就能種下一棵大樹。",
+          story: "公園想多種一些樹！看圖選出正確的乘法算式，就能種下一棵大樹。",
           host: "kid",
           before: "sprout",
           after: "tree",
-          unit: "",
           rounds: [
-            { per: 8, groups: 2 },
-            { per: 2, groups: 9 },
-            { per: 9, groups: 3 },
-            { per: 7, groups: 4 }
+            { q: "步道兩邊，每一邊種八棵樹，一共幾棵？", item: "leaf", per: 8, groups: 2, unit: "棵" },
+            { q: "有九個花盆，每盆種兩朵花，一共幾朵？", item: "flower", per: 2, groups: 9, unit: "朵" },
+            { q: "每排種三棵樹，種了六排，一共幾棵？", item: "leaf", per: 3, groups: 6, unit: "棵" },
+            { q: "有四個花圃，每個花圃種七朵花，一共幾朵？", item: "flower", per: 7, groups: 4, unit: "朵" }
           ]
         }
       ]

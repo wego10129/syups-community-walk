@@ -236,6 +236,76 @@
   #toast .big { width: 5rem; height: 5.5rem; margin: 0 auto .3rem; }
   .pthumb svg { width: 2.2rem; height: 2.2rem; }
   .combo .slotc { border-color: var(--line); }
+
+  /* ===== 第 5 版：平板一頁看完（不需要上下滑） ===== */
+  #card { align-items: center; padding: 1vh 1vw; }
+  #sheet { width: min(1000px, 98vw); height: min(760px, 96vh); max-height: none; border-radius: 22px; border: 3px solid var(--line);
+    display: flex; flex-direction: column; padding: .7rem 1.1rem .9rem; overflow: hidden; animation: popin .25s ease-out; box-shadow: 6px 6px 0 var(--line); }
+  @keyframes popin { from { transform: scale(.94); opacity: .4; } }
+  #sheet > div:last-child { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+  .photo { height: 4.6rem; margin: -.7rem -1.1rem .5rem; border-radius: 19px 19px 0 0; flex: none; }
+  #sheetHead { margin-bottom: .3rem; flex: none; }
+  #sheetHead h2 { font-size: 1.3rem; }
+  #sheetHead .big { width: 2.3rem; height: 2.3rem; }
+  .look { margin-bottom: .4rem; padding: .1rem .8rem; font-size: .95rem; flex: none; }
+  .tag { align-self: flex-start; margin-bottom: .25rem; }
+  .q { font-size: 1.22rem; margin: .1rem 0 .45rem; }
+  .opts { grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); gap: .55rem; }
+  .opt { padding: .4rem .8rem; font-size: 1.18rem; }
+  .why { margin-top: .5rem; padding: .3rem .8rem; font-size: 1.05rem; line-height: 1.95; }
+  .why.done { padding: .4rem .8rem; }
+  .why.done .cheer { width: 4.6rem; height: 5rem; }
+  .foot { margin-top: auto; display: flex; justify-content: flex-end; align-items: center; gap: .7rem; padding-top: .55rem; flex: none; }
+  .next { width: auto; min-width: 12rem; margin-top: 0; padding: .55rem 1.6rem; font-size: 1.25rem; }
+  .groups { gap: .45rem; margin: .1rem 0 .45rem; }
+  .group { padding: .25rem .4rem; }
+  .group .it { width: 1.35rem; height: 1.35rem; }
+  .step { margin-bottom: .1rem; }
+  .eqs { font-size: 1.25rem; margin-left: .4rem; }
+  .why.eq { font-size: 1.25rem; justify-content: center; }
+  .intro { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .introRow { margin: .2rem 0; }
+  .host { width: 8rem; height: 8.8rem; }
+  .sortStage { height: 5.6rem; }
+  .bins.n3 { grid-template-columns: repeat(3, 1fr); }
+  .bin .be { width: 4.4rem; height: 4.8rem; }
+  .slots.row { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .slots.row .slot { min-width: 7.5rem; flex: 1; }
+  .slot { min-height: 2.6rem; padding: .2rem .6rem; }
+  .pieces { gap: .5rem; }
+  .piece { padding: .35rem .8rem; }
+  .runTop { display: flex; align-items: center; justify-content: space-between; gap: .6rem; }
+  .runTop .targets { margin: 0; }
+  .targets .tg { width: 3.6rem; height: 4rem; }
+  .letter { line-height: 2.2rem; font-size: 1.15rem; padding: .3rem 1.1rem .6rem; margin: .3rem 0; background-size: 100% 2.3rem; }
+  .who { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); }
+
+  /* 警察追小偷 */
+  .chase { flex: none; }
+  .lane { position: relative; height: 8.6rem; border: 3px solid var(--line); border-radius: 16px; box-shadow: 3px 3px 0 var(--line); overflow: hidden;
+    background: linear-gradient(#cfe9ff 0 45%, #bfe0a0 45% 62%, #e9dcc0 62% 100%); }
+  .lane::after { content: ""; position: absolute; left: 0; right: 0; bottom: 1.2rem; border-top: 4px dashed #fff; opacity: .8; }
+  .actor { position: absolute; bottom: .2rem; width: 5.6rem; height: 6.2rem; transition: left .7s cubic-bezier(.3,1.4,.6,1); z-index: 1; }
+  .actor.hop { animation: hop .5s; }
+  @keyframes hop { 40% { transform: translateY(-14px); } }
+  .say { position: absolute; top: .35rem; left: 50%; transform: translateX(-50%) scale(.8); opacity: 0; background: #fff; border: 3px solid var(--line);
+    border-radius: 14px; padding: 0 .8rem; font-weight: bold; font-size: 1.1rem; transition: all .2s; white-space: nowrap; z-index: 2; }
+  .say.show { opacity: 1; transform: translateX(-50%) scale(1); }
+  .say.t { background: #FEF3C7; } .say.c { background: #DBEAFE; }
+  .event { margin: .5rem 0 .3rem; background: #fff; border: 3px solid var(--line); border-radius: 16px; box-shadow: 3px 3px 0 var(--line); padding: .2rem .9rem .3rem; }
+  .evLab { font-size: .95rem; opacity: .7; }
+  .event .q { font-size: 1.45rem; margin: 0; }
+  .judge { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-top: .3rem; }
+  .jb { display: flex; align-items: center; justify-content: center; gap: .6rem; font-size: 1.5rem; font-weight: bold; padding: .45rem; border: 3px solid var(--line); border-radius: 16px; box-shadow: 4px 4px 0 var(--line); }
+  .jb:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--line); }
+  .jb .ji { width: 2.5rem; height: 2.5rem; }
+  .jb.ok { background: #DCFCE7; } .jb.no { background: #FEE2E2; }
+  .chaseMsg .why { margin-top: .4rem; }
+
+  @media (max-aspect-ratio: 1/1) {
+    #sheet { height: min(980px, 94vh); }
+    .host { width: 7rem; height: 7.7rem; }
+  }
   #err { position: fixed; inset: 0; display: none; place-items: center; background: var(--paper); padding: 2rem; text-align: center; z-index: 50; }
 </style>
 </head>

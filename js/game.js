@@ -64,7 +64,7 @@
   function art(key) {
     var m = {
       pig: function () { return ART.pig(false); }, pigFull: function () { return ART.pig(true); },
-      mailboxRed: function () { return ART.mailbox("red"); }, mailboxGreen: function () { return ART.mailbox("green"); },
+      mailboxRed: function () { return ART.mailbox("red"); }, mailboxGreen: function () { return ART.mailbox("green"); }, mailboxBlue: function () { return ART.mailbox("blue"); },
       thief: function () { return ART.thief(false); }, thiefCaught: function () { return ART.thief(true); },
       kidCheer: function () { return ART.kid("cheer"); }
     };
@@ -196,13 +196,22 @@
     return;
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   var scene = new THREE.Scene();
   scene.background = new THREE.Color(0xd6ecfb);
   scene.fog = new THREE.Fog(0xd6ecfb, 80, 170);
   var camera = new THREE.PerspectiveCamera(45, 1, 0.5, 400);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xb9a98a, 0.85));
-  var sun = new THREE.DirectionalLight(0xffffff, 0.55);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x9c8f78, 0.5));
+  var sun = new THREE.DirectionalLight(0xfff1dc, 0.62);
   sun.position.set(-30, 60, 20);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.camera.left = -60; sun.shadow.camera.right = 60;
+  sun.shadow.camera.top = 60; sun.shadow.camera.bottom = -60;
+  sun.shadow.camera.near = 10; sun.shadow.camera.far = 160;
+  sun.shadow.bias = -0.0008;
+  sun.shadow.radius = 4;
   scene.add(sun);
 
   var matCache = {};
@@ -210,8 +219,29 @@
     if (!matCache[color]) matCache[color] = new THREE.MeshLambertMaterial({ color: color });
     return matCache[color];
   }
+  // 圓角方塊：讓建築看起來圓潤（太薄的板子維持一般方塊）
+  var geoCache = {};
+  function roundedBoxGeo(w, h, d) {
+    var key = [w, h, d].map(function (v) { return v.toFixed(2); }).join(",");
+    if (geoCache[key]) return geoCache[key];
+    var r = Math.min(0.28, Math.min(w, h, d) * 0.18);
+    var sw = w / 2 - r, sd = d / 2 - r, cr = r * 0.9;
+    var shape = new THREE.Shape();
+    shape.moveTo(-sw + cr, -sd);
+    shape.lineTo(sw - cr, -sd); shape.quadraticCurveTo(sw, -sd, sw, -sd + cr);
+    shape.lineTo(sw, sd - cr); shape.quadraticCurveTo(sw, sd, sw - cr, sd);
+    shape.lineTo(-sw + cr, sd); shape.quadraticCurveTo(-sw, sd, -sw, sd - cr);
+    shape.lineTo(-sw, -sd + cr); shape.quadraticCurveTo(-sw, -sd, -sw + cr, -sd);
+    var g = new THREE.ExtrudeGeometry(shape, { depth: h - 2 * r, bevelEnabled: true, bevelThickness: r, bevelSize: r, bevelSegments: 3, curveSegments: 3 });
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, r - h / 2, 0);
+    g.computeVertexNormals();
+    geoCache[key] = g;
+    return g;
+  }
   function box(w, h, d, color, x, y, z, parent) {
-    var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color));
+    var round = Math.min(w, h, d) >= 0.6;
+    var m = new THREE.Mesh(round ? roundedBoxGeo(w, h, d) : new THREE.BoxGeometry(w, h, d), mat(color));
     m.position.set(x || 0, (y || 0) + h / 2, z || 0);
     (parent || scene).add(m);
     return m;
@@ -245,7 +275,7 @@
     return m;
   }
 
-  var ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(0xc6e3ab));
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(0xb5dc96));
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
@@ -313,16 +343,22 @@
 
   /* ---------- 地標建築 ---------- */
   var pickables = [];
+  var leafCache = {};
+  function leafMat(color) {
+    if (!leafCache[color]) leafCache[color] = new THREE.MeshStandardMaterial({ color: color, flatShading: true, roughness: 0.9 });
+    return leafCache[color];
+  }
   function tree(x, z, sc, parent) {
     sc = sc || 1;
     var g = new THREE.Group();
     cyl(0.18 * sc, 0.25 * sc, 1.2 * sc, 0x8a6142, 0, 0, 0, g, 6);
-    if (rnd() < 0.5) ball(0.95 * sc, 0x6cb565, 0, 1.75 * sc, 0, g);
-    else {
-      var c = new THREE.Mesh(new THREE.ConeGeometry(0.95 * sc, 2.2 * sc, 7), mat(0x5aa35f));
-      c.position.y = 2.1 * sc;
-      g.add(c);
-    }
+    // 低多邊形的樹冠（像政策島那種切面感）
+    var greens = [0x6cb565, 0x5aa35f, 0x7dbf6a];
+    var c = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 0), leafMat(greens[Math.floor(rnd() * 3)]));
+    c.scale.set(sc * (0.95 + rnd() * 0.2), sc * (1.1 + rnd() * 0.3), sc * (0.95 + rnd() * 0.2));
+    c.rotation.y = rnd() * 3;
+    c.position.y = 1.9 * sc;
+    g.add(c);
     g.position.set(x, 0, z);
     (parent || scene).add(g);
     return g;
@@ -689,6 +725,20 @@
     cyl(0.12, 0.12, 0.4, 0x3b4a6b, -0.15, 0, 0, g, 6);
     cyl(0.12, 0.12, 0.4, 0x3b4a6b, 0.15, 0, 0, g, 6);
     ball(0.36, 0xf5d3b3, 0, 1.6, 0, g);
+    // 臉：眼睛、腮紅、笑臉
+    ball(0.055, 0x1b2836, -0.12, 1.66, 0.31, g);
+    ball(0.055, 0x1b2836, 0.12, 1.66, 0.31, g);
+    var mouth = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.022, 6, 12, Math.PI), mat(0x1b2836));
+    mouth.rotation.z = Math.PI;
+    mouth.position.set(0, 1.53, 0.33);
+    g.add(mouth);
+    var bl = new THREE.MeshBasicMaterial({ color: 0xf9a8a8 });
+    [-0.2, 0.2].forEach(function (bx) { var b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), bl); b.scale.set(1, 0.6, 0.4); b.position.set(bx, 1.55, 0.3); g.add(b); });
+    if (!hat) {
+      var hair = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2.2), mat(0x3b2a20));
+      hair.position.y = 1.62; hair.rotation.x = -0.25;
+      g.add(hair);
+    }
     if (hat) {
       cyl(0.48, 0.48, 0.06, hat, 0, 1.78, 0, g, 16);
       var top = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), mat(hat));
@@ -977,7 +1027,7 @@
       again.onclick = function () { cur.step = 0; renderTask(); };
       var close = el("button", "next gray", zy("關閉"));
       close.onclick = closeCard;
-      body.appendChild(again); body.appendChild(close);
+      var f = el("div", "foot"); f.appendChild(close); f.appendChild(again); body.appendChild(f);
       sheet.appendChild(body);
       return;
     }
@@ -1037,16 +1087,22 @@
     };
     return b;
   }
+  // 每一關的底部列：放「下一題」按鈕，固定在卡片最下面
+  function foot(body) {
+    var f = body.querySelector(".foot");
+    if (!f) { f = el("div", "foot"); body.appendChild(f); }
+    return f;
+  }
   function scrollEnd() { setTimeout(function () { sheet.scrollTop = sheet.scrollHeight; }, 60); }
 
   function renderTask() {
     head();
     var t = ST[cur.k].tasks[cur.step];
-    var body = el("div");
+    var body = el("div", "tbody t-" + t.type);
     sheet.appendChild(body);
     if (t.subject) body.appendChild(el("span", "tag " + t.subject, zy(t.subject)));
-    var fn = { info: taskInfo, choice: taskChoice, math: taskMath, order: taskOrder, letter: taskLetter, sort: gameSort, catch: gameCatch, run: gameRun, pick2: taskPick2 }[t.type];
-    if (t.title && (t.type === "sort" || t.type === "catch" || t.type === "run" || t.type === "pick2")) intro(t, body, fn);
+    var fn = { info: taskInfo, choice: taskChoice, math: taskMath, order: taskOrder, letter: taskLetter, sort: gameSort, catch: gameCatch, chase: gameChase, run: gameRun, pick2: taskPick2 }[t.type];
+    if (t.title && t.story) intro(t, body, fn);
     else fn(t, body);
     sheet.scrollTop = 0;
   }
@@ -1063,13 +1119,13 @@
     box_.appendChild(row);
     var go = el("button", "next", zy("開始 ▶"));
     go.onclick = function () { body.innerHTML = ""; body.appendChild(el("span", "tag " + t.subject, zy(t.subject))); fn(t, body); };
-    box_.appendChild(go);
     body.appendChild(box_);
+    foot(body).appendChild(go);
   }
 
   function taskInfo(t, body) {
     body.appendChild(qLine(t.text));
-    body.appendChild(nextBtn("知道了 ▶"));
+    foot(body).appendChild(nextBtn("知道了 ▶"));
   }
 
   function choiceBlock(body, q, options, answer, onRight, why) {
@@ -1106,44 +1162,52 @@
     body.appendChild(msg);
   }
   function taskChoice(t, body) {
-    choiceBlock(body, t.q, t.options, t.answer, function () { body.appendChild(nextBtn()); scrollEnd(); }, t.why);
+    choiceBlock(body, t.q, t.options, t.answer, function () { foot(body).appendChild(nextBtn()); }, t.why);
   }
 
-  function taskMath(t, body) {
-    body.appendChild(qLine(t.story, t.story + t.ask));
+  // 乘法選項：正確（被乘數×乘數）、前後對調、加法；兩個數一樣時改用別的干擾
+  function mulForms(per, groups) {
+    var f = [per + " × " + groups];
+    if (per !== groups) f.push(groups + " × " + per);
+    f.push(per + " + " + groups);
+    if (f.length < 3) f.push(per + " × " + (groups + 1 <= 9 ? groups + 1 : groups - 1));
+    return f;
+  }
+  function groupPics(item, per, groups) {
     var gs = el("div", "groups");
-    for (var g = 0; g < t.groups; g++) {
+    for (var g = 0; g < groups; g++) {
       var one = "";
-      for (var k = 0; k < t.per; k++) one += '<span class="it">' + art(t.item) + "</span>";
+      for (var k = 0; k < per; k++) one += '<span class="it">' + art(item) + "</span>";
       gs.appendChild(el("span", "group", one));
     }
-    body.appendChild(gs);
+    return gs;
+  }
+  function taskMath(t, body) {
+    body.appendChild(qLine(t.story, t.story + t.ask));
+    body.appendChild(groupPics(t.item, t.per, t.groups));
     var ans = t.per * t.groups;
-    var alt = t.groups + 1 <= 9 ? t.groups + 1 : t.groups - 1;
-    var forms = [t.per + " × " + t.groups, t.per + " + " + t.groups, t.per + " × " + alt];
+    var area = el("div", "steparea");
+    body.appendChild(area);
+    var forms = mulForms(t.per, t.groups);
     var order = shuffle([0, 1, 2]);
-    var step1 = el("div");
-    step1.appendChild(el("div", "step", zy("第一步：列式")));
-    body.appendChild(step1);
-    var u = zhNum(t.per), gzh = zhNum(t.groups);
-    choiceBlock(step1, "要怎麼列式？", order.map(function (k) { return forms[k]; }), order.indexOf(0), function () {
-      var nums = uniq([ans, t.per + t.groups, ans + t.per, ans - t.per]).slice(0, 3);
-      var o2 = shuffle(nums);
-      var step2 = el("div");
-      step2.appendChild(el("div", "step", zy("第二步：算出答案")));
-      body.appendChild(step2);
-      choiceBlock(step2, t.ask, o2.map(function (n) { return n + " " + t.unit; }), o2.indexOf(ans), function () {
-        body.appendChild(el("div", "why eq", t.per + " × " + t.groups + " ＝ " + ans + "<br>" + zy("答：") + ans + " " + zy(t.unit)));
-        body.appendChild(nextBtn());
-        scrollEnd();
-      });
-      scrollEnd();
-    }, "每一份有" + u + t.unit + "，有" + gzh + "份，所以是 " + t.per + " × " + t.groups + "。");
+    area.appendChild(el("div", "step", zy("第一步：列式")));
+    choiceBlock(area, "要怎麼列式？", order.map(function (k) { return forms[k]; }), order.indexOf(0), function () {
+      setTimeout(function () {
+        area.innerHTML = "";
+        area.appendChild(el("div", "step", zy("第二步：算出答案") + '　<b class="eqs">' + forms[0] + "</b>"));
+        var nums = uniq([ans, t.per + t.groups, ans + t.per, ans - t.per]).slice(0, 3);
+        var o2 = shuffle(nums);
+        choiceBlock(area, t.ask, o2.map(function (n) { return n + " " + t.unit; }), o2.indexOf(ans), function () {
+          area.appendChild(el("div", "why eq", t.per + " × " + t.groups + " ＝ " + ans + "　" + zy("答：") + ans + " " + zy(t.unit)));
+          foot(body).appendChild(nextBtn());
+        });
+      }, 900);
+    }, "一份有" + zhNum(t.per) + t.unit + "，有" + zhNum(t.groups) + "份，被乘數寫前面：" + t.per + " × " + t.groups + "。");
   }
 
   function taskOrder(t, body) {
     body.appendChild(qLine(t.q));
-    var slots = el("div", "slots");
+    var slots = el("div", "slots" + (t.items[0].label ? "" : " row"));
     t.items.forEach(function (it, k) { slots.appendChild(el("div", "slot", '<span class="n">' + (k + 1) + "</span>")); });
     body.appendChild(slots);
     var hint = el("div");
@@ -1154,24 +1218,22 @@
     var filled = 0;
     mixed.forEach(function (k) {
       var b = el("button", "piece", zy(t.items[k].text));
-      b.dataset.k = k;
       b.onclick = function () {
         if (k === filled) {
           var s = slots.children[filled];
           s.classList.add("filled");
-          s.innerHTML = '<span class="n">' + (filled + 1) + '</span><span class="lb">' + zy(t.items[k].label) + "</span>" + zy(t.items[k].text);
+          s.innerHTML = (t.items[k].label ? '<span class="lb">' + zy(t.items[k].label) + "</span>" : "") + zy(t.items[k].text);
           b.remove();
           filled++;
           hint.innerHTML = "";
           if (filled === t.items.length) {
-            hint.appendChild(okMsg("排好了！信的順序是：" + t.items.map(function (i) { return i.label; }).join("、")));
-            body.appendChild(nextBtn());
-            scrollEnd();
+            hint.appendChild(okMsg("排好了！唸唸看：" + t.items.map(function (i) { return i.text; }).join("")));
+            foot(body).appendChild(nextBtn());
           }
         } else {
           b.classList.remove("wrong"); void b.offsetWidth; b.classList.add("wrong");
           hint.innerHTML = "";
-          hint.appendChild(hintMsg("第" + zhNum(filled + 1) + "格要放「" + t.items[filled].label + "」喔！"));
+          hint.appendChild(hintMsg(t.hint || ("第" + zhNum(filled + 1) + "格要放「" + t.items[filled].label + "」喔！")));
         }
       };
       pieces.appendChild(b);
@@ -1191,7 +1253,7 @@
     var cardEl = el("div", "sortCard" + (t.card === "envelope" ? " env" : ""));
     stage.appendChild(cardEl);
     body.appendChild(stage);
-    var bins = el("div", "bins");
+    var bins = el("div", "bins n" + t.bins.length);
     var msg = el("div");
     t.bins.forEach(function (bn, k) {
       var b = el("button", "bin", '<span class="be">' + art(bn.art) + "</span><span>" + zy(bn.name) + "</span>");
@@ -1224,7 +1286,7 @@
       stage.style.display = "none"; bins.style.display = "none";
       var nStar = firstTry >= items.length ? 3 : firstTry >= items.length - 2 ? 2 : 1;
       body.appendChild(doneMsg("全部分類完成！", nStar));
-      body.appendChild(nextBtn());
+      foot(body).appendChild(nextBtn());
       scrollEnd();
     }
     show();
@@ -1270,44 +1332,128 @@
         cop.style.left = "62%";
         msg.innerHTML = "";
         msg.appendChild(doneMsg("抓到壞蛋了！" + t.end));
-        body.appendChild(nextBtn());
+        foot(body).appendChild(nextBtn());
         scrollEnd();
       }, 500);
     }
   }
 
-  /* --- 小遊戲：連續答題（滅火、種樹、存錢） --- */
+  /* --- 小遊戲：看圖列式（滅火、種樹、存錢） --- */
   function gameRun(t, body) {
     var r = 0;
-    body.appendChild(el("div", "gtitle", zy(t.title)));
+    var top = el("div", "runTop");
+    top.appendChild(el("div", "gtitle", zy(t.title)));
     var row = el("div", "targets");
     t.rounds.forEach(function () { row.appendChild(el("span", "tg", art(t.before))); });
-    body.appendChild(row);
-    var area = el("div");
+    top.appendChild(row);
+    body.appendChild(top);
+    var area = el("div", "steparea");
     body.appendChild(area);
     function round() {
       area.innerHTML = "";
       if (r >= t.rounds.length) {
-        body.appendChild(doneMsg("任務完成！"));
-        body.appendChild(nextBtn());
-        scrollEnd();
+        area.appendChild(doneMsg("任務完成！"));
+        foot(body).appendChild(nextBtn());
         return;
       }
       var rd = t.rounds[r], ans = rd.per * rd.groups;
-      area.appendChild(el("div", "step", zy("第" + zhNum(r + 1) + "題")));
-      var q = rd.q || (rd.per + " × " + rd.groups + " ＝ ？");
-      var opts = shuffle(uniq([ans, ans + rd.per, ans - rd.per > 0 ? ans - rd.per : rd.per + rd.groups, rd.per + rd.groups]).slice(0, 3));
-      var unit = t.unit ? " " + t.unit : "";
-      choiceBlock(area, q, opts.map(function (n) { return n + unit; }), opts.indexOf(ans), function () {
+      var forms = mulForms(rd.per, rd.groups), order = shuffle([0, 1, 2]);
+      area.appendChild(qLine("第" + zhNum(r + 1) + "題：" + rd.q));
+      area.appendChild(groupPics(rd.item, rd.per, rd.groups));
+      choiceBlock(area, "", order.map(function (k) { return forms[k]; }), order.indexOf(0), function () {
         var tg = row.children[r];
         tg.innerHTML = art(t.after);
         tg.classList.add("pop");
-        area.appendChild(el("div", "why eq", rd.per + " × " + rd.groups + " ＝ " + ans + unit.replace(" ", " ")));
+        area.appendChild(el("div", "why eq", forms[0] + " ＝ " + ans + "　" + zy("答：") + ans + " " + zy(rd.unit)));
         r++;
-        setTimeout(round, 1100);
-      });
+        setTimeout(round, 1500);
+      }, "一份有" + zhNum(rd.per) + "，有" + zhNum(rd.groups) + "份，被乘數寫前面。");
     }
     round();
+  }
+
+  /* --- 小遊戲：警察追小偷（一次一件事，判斷可以／不可以） --- */
+  function gameChase(t, body) {
+    var GOAL = 5;            // 警察要追幾步才抓到
+    var gap = GOAL;          // 警察和小偷之間還差幾步
+    var queue = shuffle(t.items.map(function (_, k) { return k; }));
+    var stage = el("div", "chase");
+    var lane = el("div", "lane");
+    var cop = el("div", "actor cop", ART.police("happy"));
+    var thief = el("div", "actor thief", ART.thief("smug"));
+    var say = el("div", "say");
+    lane.appendChild(cop); lane.appendChild(thief); lane.appendChild(say);
+    stage.appendChild(lane);
+    body.appendChild(stage);
+    var card = el("div", "event");
+    body.appendChild(card);
+    var btns = el("div", "judge");
+    var bOk = el("button", "jb ok", '<span class="ji">' + ART.check() + "</span>" + zy("可以"));
+    var bNo = el("button", "jb no", '<span class="ji">' + ART.cross() + "</span>" + zy("不可以"));
+    btns.appendChild(bOk); btns.appendChild(bNo);
+    body.appendChild(btns);
+    var msgBox = el("div", "chaseMsg");
+    body.appendChild(msgBox);
+    var busy = false, cur_ = -1;
+    function place() {
+      // 小偷站在右邊；警察的位置依距離決定
+      var left = 6 + (GOAL - gap) / GOAL * 58;
+      cop.style.left = left + "%";
+      thief.style.left = Math.min(82, left + 14 + gap * 2) + "%";
+    }
+    function bubble(text, who) {
+      say.innerHTML = zy(text);
+      say.className = "say show " + who;
+      clearTimeout(say._t);
+      say._t = setTimeout(function () { say.className = "say"; }, 1400);
+    }
+    function next() {
+      busy = false;
+      if (gap <= 0) return win();
+      if (!queue.length) queue = shuffle(t.items.map(function (_, k) { return k; }));
+      cur_ = queue.shift();
+      card.innerHTML = '<div class="evLab">' + zy("看到這件事：") + "</div>";
+      var q = el("div", "evText");
+      q.appendChild(qLine(t.items[cur_].text));
+      card.appendChild(q);
+    }
+    function judge(saysOk) {
+      if (busy || cur_ < 0) return;
+      busy = true;
+      var it = t.items[cur_];
+      msgBox.innerHTML = "";
+      if (saysOk === it.ok) {
+        gap--;
+        cop.innerHTML = ART.police(gap <= 0 ? "proud" : "run");
+        thief.innerHTML = ART.thief(gap <= 1 ? "worried" : "smug");
+        cop.classList.remove("hop"); void cop.offsetWidth; cop.classList.add("hop");
+        bubble(it.ok ? "對，可以這樣做！" : "嗶！不可以！", "c");
+        msgBox.appendChild(okMsg(it.why));
+      } else {
+        gap = Math.min(GOAL, gap + 1);
+        queue.splice(Math.min(2, queue.length), 0, cur_); // 答錯的題目，隔兩題再出一次
+        thief.innerHTML = ART.thief("smug");
+        cop.innerHTML = ART.police("happy");
+        thief.classList.remove("hop"); void thief.offsetWidth; thief.classList.add("hop");
+        bubble("嘿嘿，我溜走了！", "t");
+        msgBox.appendChild(hintMsg((it.ok ? "這件事是可以的。" : "這件事是不可以的。") + it.why));
+      }
+      place();
+      setTimeout(next, 1700);
+    }
+    bOk.onclick = function () { judge(true); };
+    bNo.onclick = function () { judge(false); };
+    function win() {
+      cop.innerHTML = ART.police("proud");
+      thief.innerHTML = ART.thief("caught");
+      thief.style.left = "60%"; cop.style.left = "44%";
+      card.style.display = "none"; btns.style.display = "none";
+      msgBox.innerHTML = "";
+      msgBox.appendChild(doneMsg("抓到小偷了！" + t.end));
+      foot(body).appendChild(nextBtn());
+    }
+    place();
+    next();
   }
 
   /* --- 地名挑戰：選出兩個 --- */
@@ -1336,7 +1482,7 @@
           if (got === 2) {
             combo.querySelector(".res").classList.add("on");
             msg.appendChild(doneMsg(t.end));
-            body.appendChild(nextBtn());
+            foot(body).appendChild(nextBtn());
             scrollEnd();
           }
         } else {
@@ -1390,7 +1536,7 @@
         '<div class="right">' + zy(zhDate()) + "</div>";
       b3.appendChild(L);
       b3.appendChild(el("div", "note", zy("名字只會顯示在這台平板上，不會上傳。完成後，照著這個格式把信抄到信紙上，還可以再多寫幾句話！")));
-      b3.appendChild(nextBtn("寫好了"));
+      foot(b3).appendChild(nextBtn("寫好了"));
     }
   }
 
@@ -1461,9 +1607,17 @@
     renderer.render(scene, camera);
     requestAnimationFrame(loop);
   }
+  // 陰影：建築、樹、人物投影；地面接收
+  scene.traverse(function (o) {
+    if (!o.isMesh) return;
+    var flat = o.geometry && o.geometry.type === "PlaneGeometry";
+    o.receiveShadow = true;
+    o.castShadow = !flat && o !== shadow && o !== ring;
+  });
+  shadow.visible = false;
   refresh();
   loop();
   dbOpen(function () { dbAll(function () { ST.forEach(function (_, k) { photoSprite(k); }); }); });
 
-  window.__walk = { state: state, openStation: openStation, chooseStation: chooseStation, zy: zy };
+  window.__walk = { state: state, openStation: openStation, chooseStation: chooseStation, zy: zy, jump: function (n) { if (cur) { cur.step = n; renderTask(); } } };
 })();
