@@ -59,6 +59,34 @@
     } catch (e) {}
   }
 
+  /* ---------- 角色與圖示 ---------- */
+  var ART = window.ART;
+  function art(key) {
+    var m = {
+      pig: function () { return ART.pig(false); }, pigFull: function () { return ART.pig(true); },
+      mailboxRed: function () { return ART.mailbox("red"); }, mailboxGreen: function () { return ART.mailbox("green"); },
+      thief: function () { return ART.thief(false); }, thiefCaught: function () { return ART.thief(true); },
+      kidCheer: function () { return ART.kid("cheer"); }
+    };
+    if (m[key]) return m[key]();
+    if (ART[key]) return ART[key]();
+    return "";
+  }
+  function stars(n) { var h = ""; for (var k = 0; k < 3; k++) h += '<span class="st">' + ART.star(k < n) + "</span>"; return h; }
+  // 答對、提示、完成的訊息框（圖示＋注音文字）
+  function msg(cls, icon, text) { return el("div", "why " + cls, '<span class="mi">' + icon + "</span><span>" + zy(text) + "</span>"); }
+  function okMsg(text) { return msg("", ART.check(), text); }
+  function hintMsg(text) { return msg("hint", ART.think(), text); }
+  function doneMsg(text, n) {
+    return el("div", "why done", '<div class="cheer">' + ART.kid("cheer") + "</div>" + (n ? '<div class="stars">' + stars(n) + "</div>" : "") + "<div>" + zy(text) + "</div>");
+  }
+  // 站的小圖示做成圖片，畫到 3D 站牌上
+  function svgImg(svgText) {
+    var img = new Image();
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svgText.replace("<svg ", '<svg width="128" height="128" '));
+    return img;
+  }
+
   /* ---------- 注音 ---------- */
   var Z = window.ZHUYIN;
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
@@ -466,18 +494,19 @@
     c.lineWidth = 10; c.strokeStyle = bd; c.stroke();
     c.beginPath(); c.moveTo(W / 2 - 22, 174); c.lineTo(W / 2, 210); c.lineTo(W / 2 + 22, 174); c.closePath();
     c.fillStyle = bd; c.fill();
-    var icon = st === "done" ? "✅" : ST[k].emoji, name = ST[k].name;
+    var name = ST[k].name;
     var fs = 60;
-    while (fs > 26 && fs * 1.2 + zyMeasure(c, name, fs) > W - 70) fs -= 3;
-    var wName = zyMeasure(c, name, fs), wAll = fs * 1.2 + wName, x0 = (W - wAll) / 2;
-    c.font = fs + "px " + FONT;
-    c.textBaseline = "middle"; c.textAlign = "left";
-    c.fillText(icon, x0, 94);
-    zyDraw(c, name, x0 + fs * 1.2, 94, fs);
+    while (fs > 26 && fs * 1.3 + zyMeasure(c, name, fs) > W - 70) fs -= 3;
+    var wName = zyMeasure(c, name, fs), wAll = fs * 1.3 + wName, x0 = (W - wAll) / 2;
+    var img = st === "done" ? checkImg : sg.icon;
+    if (img && img.complete && img.naturalWidth) c.drawImage(img, x0, 94 - fs * 0.6, fs * 1.15, fs * 1.15);
+    zyDraw(c, name, x0 + fs * 1.3, 94, fs);
     sg.tex.needsUpdate = true;
   }
 
   var buildings = [];
+  var checkImg = svgImg(ART.check());
+  checkImg.onload = function () { signs.forEach(function (_, k) { drawSign(k); }); };
   ST.forEach(function (stn, k) {
     var g = new THREE.Group();
     g.position.set(stn.pos[0], 0, stn.pos[1]);
@@ -499,7 +528,8 @@
     sp.userData.baseY = high;
     scene.add(sp);
     pickables.push(sp);
-    signs[k] = { sprite: sp, ctx: cv.getContext("2d"), tex: tex, photo: null };
+    signs[k] = { sprite: sp, ctx: cv.getContext("2d"), tex: tex, photo: null, icon: svgImg(ART.iconFor(stn)) };
+    signs[k].icon.onload = function () { drawSign(k); };
   });
 
   // 照片立牌：老師匯入照片後，掛在地標上方
@@ -770,7 +800,7 @@
     ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
     var hit = ray.intersectObjects(pickables, false)[0];
     if (!hit) return;
-    if (hit.object.userData.center) { toast("🌾", TOUR.center.tip); return; }
+    if (hit.object.userData.center) { toast(ART.map(), TOUR.center.tip); return; }
     var k = hit.object.userData.station;
     if (k === 0 && nextIndex() === ST.length - 1) k = ST.length - 1;
     chooseStation(k);
@@ -780,7 +810,7 @@
     if (k === state.at) { openStation(k); return; }
     if (state.teacher || k === nextIndex() || state.done[ST[k].id]) {
       walkTo(k, function () { if (!state.done[ST[k].id]) openStation(k); });
-    } else toast("🚶", "先完成前面的站，再來這裡喔！");
+    } else toast(ART.kid(), "先完成前面的站，再來這裡喔！");
   }
 
   /* ---------- 介面 ---------- */
@@ -791,7 +821,7 @@
   document.title = TOUR.title + "地圖";
   var stampBox = $("stamps");
   ST.forEach(function (stn) {
-    var s = el("div", "stamp", stn.emoji);
+    var s = el("div", "stamp", ART.iconFor(stn));
     s.title = stn.name;
     stampBox.appendChild(s);
   });
@@ -806,9 +836,9 @@
     var go = $("goBtn"), n = nextIndex();
     go.disabled = walking;
     var label;
-    if (walking) label = "🚶 走路中…";
-    else if (n === -1) label = "🎉 踏查完成！";
-    else if (n === state.at) label = "📋 開始任務：" + ST[n].name;
+    if (walking) label = "走路中…";
+    else if (n === -1) label = "踏查完成！";
+    else if (n === state.at) label = "開始任務：" + ST[n].name;
     else label = "▶ 走到下一站：" + ST[n].name;
     go.innerHTML = zy(label);
     var ns = n === -1 ? null : ST[n];
@@ -833,7 +863,7 @@
   $("goBtn").onclick = function () {
     var n = nextIndex();
     if (walking) return;
-    if (n === -1) { toast("🎉", "全部完成了！可以點站牌再玩一次。"); return; }
+    if (n === -1) { toast(ART.kid("cheer"), "全部完成了！可以點站牌再玩一次。"); return; }
     if (n === state.at) openStation(n);
     else walkTo(n, function () { openStation(n); });
   };
@@ -866,7 +896,7 @@
   var toastTimer;
   function toast(icon, text) {
     var t = $("toast");
-    t.innerHTML = '<span class="big">' + icon + "</span>" + zy(text);
+    t.innerHTML = '<span class="big">' + icon + "</span><div>" + zy(text) + "</div>";
     t.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.classList.remove("show"); }, 2300);
@@ -883,7 +913,7 @@
       var row = el("div", "prow");
       var th = el("div", "pthumb");
       if (photos[stn.id]) th.style.backgroundImage = "url(" + photos[stn.id] + ")";
-      else th.textContent = stn.emoji;
+      else th.innerHTML = ART.iconFor(stn);
       row.appendChild(th);
       row.appendChild(el("div", "pname", stn.name));
       var lab = el("label", "pbtn", "選照片");
@@ -942,8 +972,8 @@
     if (state.done[ST[k].id]) {
       head();
       var body = el("div");
-      body.appendChild(el("p", "q", zy("這一站已經完成了 ✅")));
-      var again = el("button", "next", zy("🔁 再玩一次"));
+      body.appendChild(okMsg("這一站已經完成了！"));
+      var again = el("button", "next", zy("再玩一次"));
       again.onclick = function () { cur.step = 0; renderTask(); };
       var close = el("button", "next gray", zy("關閉"));
       close.onclick = closeCard;
@@ -971,7 +1001,7 @@
     }
     var h = el("div");
     h.id = "sheetHead";
-    h.appendChild(el("span", "big", stn.emoji));
+    h.appendChild(el("span", "big", ART.iconFor(stn)));
     h.appendChild(el("h2", "", zy(stn.name)));
     var dots = el("div");
     dots.id = "dots";
@@ -984,14 +1014,14 @@
     sheet.appendChild(h);
     if (cur.step === 0 && stn.lookFor) {
       var lf = el("div", "look");
-      lf.appendChild(el("span", "lfi", "🔍"));
+      lf.appendChild(el("span", "lfi", ART.magnifier()));
       lf.appendChild(el("span", "", zy(stn.lookFor)));
       sheet.appendChild(lf);
     }
   }
   function qLine(text, sayText) {
     var d = el("div", "q");
-    var b = el("button", "speak", "🔊");
+    var b = el("button", "speak", ART.speaker());
     b.setAttribute("aria-label", "念給我聽");
     b.onclick = function () { speak(sayText || text); };
     d.appendChild(b);
@@ -1024,10 +1054,13 @@
   // 小遊戲的開場小視窗
   function intro(t, body, fn) {
     var box_ = el("div", "intro");
-    var icon = t.type === "pick2" ? "🔍" : t.type === "catch" ? "👮" : t.type === "sort" ? (t.bins[0].emoji + t.bins[1].emoji) : t.before;
-    box_.appendChild(el("div", "introIcon", icon));
     box_.appendChild(el("h3", "", zy(t.title)));
-    box_.appendChild(qLine(t.story));
+    var row = el("div", "introRow");
+    row.appendChild(el("div", "host", art(t.host || "kid")));
+    var bubble = el("div", "bubble");
+    bubble.appendChild(qLine(t.story));
+    row.appendChild(bubble);
+    box_.appendChild(row);
     var go = el("button", "next", zy("開始 ▶"));
     go.onclick = function () { body.innerHTML = ""; body.appendChild(el("span", "tag " + t.subject, zy(t.subject))); fn(t, body); };
     box_.appendChild(go);
@@ -1053,7 +1086,7 @@
           b.classList.add("right");
           box_.dataset.locked = 1;
           msg.innerHTML = "";
-          if (why) msg.appendChild(el("div", "why", zy("⭕ 答對了！" + why)));
+          if (why) msg.appendChild(okMsg("答對了！" + why));
           onRight(tries === 0);
         } else {
           tries++;
@@ -1062,9 +1095,9 @@
           if (tries >= 2) {
             box_.children[answer].classList.add("right");
             box_.dataset.locked = 1;
-            msg.appendChild(el("div", "why hint", zy("答案是「" + options[answer] + "」。" + (why || ""))));
+            msg.appendChild(hintMsg("答案是「" + options[answer] + "」。" + (why || "")));
             onRight(false);
-          } else msg.appendChild(el("div", "why hint", zy("🤔 再想想看！")));
+          } else msg.appendChild(hintMsg("再想想看！"));
         }
       };
       box_.appendChild(b);
@@ -1081,7 +1114,7 @@
     var gs = el("div", "groups");
     for (var g = 0; g < t.groups; g++) {
       var one = "";
-      for (var k = 0; k < t.per; k++) one += t.emoji;
+      for (var k = 0; k < t.per; k++) one += '<span class="it">' + art(t.item) + "</span>";
       gs.appendChild(el("span", "group", one));
     }
     body.appendChild(gs);
@@ -1131,14 +1164,14 @@
           filled++;
           hint.innerHTML = "";
           if (filled === t.items.length) {
-            hint.appendChild(el("div", "why", zy("⭕ 排好了！信的順序是：" + t.items.map(function (i) { return i.label; }).join("、"))));
+            hint.appendChild(okMsg("排好了！信的順序是：" + t.items.map(function (i) { return i.label; }).join("、")));
             body.appendChild(nextBtn());
             scrollEnd();
           }
         } else {
           b.classList.remove("wrong"); void b.offsetWidth; b.classList.add("wrong");
           hint.innerHTML = "";
-          hint.appendChild(el("div", "why hint", zy("第" + zhNum(filled + 1) + "格要放「" + t.items[filled].label + "」喔！")));
+          hint.appendChild(hintMsg("第" + zhNum(filled + 1) + "格要放「" + t.items[filled].label + "」喔！"));
         }
       };
       pieces.appendChild(b);
@@ -1155,13 +1188,13 @@
     body.appendChild(el("div", "gtitle", zy(t.title)));
     body.appendChild(bar);
     var stage = el("div", "sortStage");
-    var cardEl = el("div", "sortCard");
+    var cardEl = el("div", "sortCard" + (t.card === "envelope" ? " env" : ""));
     stage.appendChild(cardEl);
     body.appendChild(stage);
     var bins = el("div", "bins");
     var msg = el("div");
     t.bins.forEach(function (bn, k) {
-      var b = el("button", "bin", '<span class="be">' + bn.emoji + "</span>" + zy(bn.name));
+      var b = el("button", "bin", '<span class="be">' + art(bn.art) + "</span><span>" + zy(bn.name) + "</span>");
       b.onclick = function () {
         if (n >= items.length || stage.dataset.busy) return;
         var it = items[n];
@@ -1177,7 +1210,7 @@
           tries++;
           cardEl.classList.remove("wrong"); void cardEl.offsetWidth; cardEl.classList.add("wrong");
           msg.innerHTML = "";
-          msg.appendChild(el("div", "why hint", zy(tries >= 2 ? "這張要放到「" + t.bins[it.bin].name + "」喔！" : "🤔 再想想看！")));
+          msg.appendChild(hintMsg(tries >= 2 ? "這張要放到「" + t.bins[it.bin].name + "」喔！" : "再想想看！"));
         }
       };
       bins.appendChild(b);
@@ -1186,11 +1219,11 @@
     body.appendChild(msg);
     function show() {
       fill.style.width = (n / items.length * 100) + "%";
-      cardEl.className = "sortCard";
+      cardEl.className = "sortCard" + (t.card === "envelope" ? " env" : "");
       if (n < items.length) { cardEl.innerHTML = zy(items[n].text); return; }
       stage.style.display = "none"; bins.style.display = "none";
-      var stars = firstTry >= items.length ? 3 : firstTry >= items.length - 2 ? 2 : 1;
-      body.appendChild(el("div", "why done", "<span class='stars'>" + "⭐".repeat(stars) + "</span>" + zy("全部分類完成！")));
+      var nStar = firstTry >= items.length ? 3 : firstTry >= items.length - 2 ? 2 : 1;
+      body.appendChild(doneMsg("全部分類完成！", nStar));
       body.appendChild(nextBtn());
       scrollEnd();
     }
@@ -1202,7 +1235,7 @@
     var badTotal = t.items.filter(function (i) { return i.bad; }).length, found = 0;
     body.appendChild(el("div", "gtitle", zy(t.title)));
     var track = el("div", "track");
-    var cop = el("span", "cop", "👮"), thief = el("span", "thief", "🦹");
+    var cop = el("span", "cop", ART.police()), thief = el("span", "thief", ART.thief(false));
     track.appendChild(cop); track.appendChild(thief);
     body.appendChild(track);
     body.appendChild(el("div", "step", zy("點一點：哪些是「不對的行為」？")));
@@ -1217,14 +1250,14 @@
         if (it.bad) {
           found++;
           b.classList.add("caught");
-          b.insertAdjacentHTML("beforeend", '<span class="badge">🚨</span>');
-          msg.appendChild(el("div", "why", zy(t.badNote)));
+          b.insertAdjacentHTML("beforeend", '<span class="badge">' + ART.cuffs() + "</span>");
+          msg.appendChild(okMsg(t.badNote));
           cop.style.left = (8 + 70 * found / badTotal) + "%";
           if (found === badTotal) win();
         } else {
           b.classList.add("good");
-          b.insertAdjacentHTML("beforeend", '<span class="badge">👍</span>');
-          msg.appendChild(el("div", "why hint", zy(t.goodNote)));
+          b.insertAdjacentHTML("beforeend", '<span class="badge">' + ART.check() + "</span>");
+          msg.appendChild(hintMsg(t.goodNote));
         }
       };
       grid.appendChild(b);
@@ -1233,10 +1266,10 @@
     body.appendChild(msg);
     function win() {
       setTimeout(function () {
-        thief.textContent = "🚔";
-        cop.style.left = "70%";
+        thief.innerHTML = ART.thief(true);
+        cop.style.left = "62%";
         msg.innerHTML = "";
-        msg.appendChild(el("div", "why done", "<span class='stars'>🎉</span>" + zy("抓到壞蛋了！" + t.end)));
+        msg.appendChild(doneMsg("抓到壞蛋了！" + t.end));
         body.appendChild(nextBtn());
         scrollEnd();
       }, 500);
@@ -1248,14 +1281,14 @@
     var r = 0;
     body.appendChild(el("div", "gtitle", zy(t.title)));
     var row = el("div", "targets");
-    t.rounds.forEach(function () { row.appendChild(el("span", "tg", t.before)); });
+    t.rounds.forEach(function () { row.appendChild(el("span", "tg", art(t.before))); });
     body.appendChild(row);
     var area = el("div");
     body.appendChild(area);
     function round() {
       area.innerHTML = "";
       if (r >= t.rounds.length) {
-        body.appendChild(el("div", "why done", "<span class='stars'>🎉</span>" + zy("任務完成！")));
+        body.appendChild(doneMsg("任務完成！"));
         body.appendChild(nextBtn());
         scrollEnd();
         return;
@@ -1267,7 +1300,7 @@
       var unit = t.unit ? " " + t.unit : "";
       choiceBlock(area, q, opts.map(function (n) { return n + unit; }), opts.indexOf(ans), function () {
         var tg = row.children[r];
-        tg.textContent = t.after;
+        tg.innerHTML = art(t.after);
         tg.classList.add("pop");
         area.appendChild(el("div", "why eq", rd.per + " × " + rd.groups + " ＝ " + ans + unit.replace(" ", " ")));
         r++;
@@ -1302,13 +1335,13 @@
           sl.classList.add("on");
           if (got === 2) {
             combo.querySelector(".res").classList.add("on");
-            msg.appendChild(el("div", "why done", "<span class='stars'>🎉</span>" + zy(t.end)));
+            msg.appendChild(doneMsg(t.end));
             body.appendChild(nextBtn());
             scrollEnd();
           }
         } else {
           b.classList.remove("wrong"); void b.offsetWidth; b.classList.add("wrong");
-          msg.appendChild(el("div", "why hint", zy("🤔 再想想看！提示：一個是老地名，一個是溪的名字。")));
+          msg.appendChild(hintMsg("再想想看！提示：一個是老地名，一個是溪的名字。"));
         }
       };
       grid.appendChild(b);
@@ -1322,7 +1355,7 @@
     body.appendChild(el("div", "step", zy("第一步：你想寫給誰？")));
     var who = el("div", "who");
     t.recipients.forEach(function (r) {
-      var b = el("button", "opt", r.emoji + " " + zy(r.name));
+      var b = el("button", "opt who1", '<span class="wi">' + (ART.icon[r.icon] || ART.icon.letter)() + "</span>" + zy(r.name));
       b.onclick = function () { pickLine(r); };
       who.appendChild(b);
     });
@@ -1357,7 +1390,7 @@
         '<div class="right">' + zy(zhDate()) + "</div>";
       b3.appendChild(L);
       b3.appendChild(el("div", "note", zy("名字只會顯示在這台平板上，不會上傳。完成後，照著這個格式把信抄到信紙上，還可以再多寫幾句話！")));
-      b3.appendChild(nextBtn("✉️ 寫好了"));
+      b3.appendChild(nextBtn("寫好了"));
     }
   }
 
@@ -1365,8 +1398,8 @@
     var stn = ST[cur.k];
     state.done[stn.id] = true;
     closeCard();
-    if (nextIndex() === -1) toast("🎉", "完成社區踏查！拿到全部" + zhNum(ST.length) + "個印章！");
-    else toast(stn.emoji, "拿到「" + stn.name + "」的印章！");
+    if (nextIndex() === -1) toast(ART.kid("cheer"), "完成社區踏查！拿到全部" + zhNum(ST.length) + "個印章！");
+    else toast(ART.iconFor(stn), "拿到「" + stn.name + "」的印章！");
   }
 
   /* ---------- 畫面大小 ---------- */

@@ -182,6 +182,60 @@
   .pbtn.gray { background: #b9aa9a; }
   .pbtn input { display: none; }
   .prow2 { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .8rem; }
+
+  /* ===== 第 4 版：小遊戲改用自繪角色，外框風格照 class-games ===== */
+  :root { --line: #1B2836; }
+  svg { display: block; width: 100%; height: 100%; overflow: visible; }
+  #sheet { background: #F7F4EC linear-gradient(rgba(27,40,54,.05) 1px, transparent 1px) 0 0 / 22px 22px, linear-gradient(90deg, rgba(27,40,54,.05) 1px, transparent 1px) 0 0 / 22px 22px; border: 3px solid var(--line); border-bottom: none; }
+  #sheetHead .big { width: 2.8rem; height: 2.8rem; display: inline-block; font-size: 1rem; }
+  .stamp { font-size: 0; padding: .25rem; }
+  .stamp svg { width: 100%; height: 100%; }
+  .opt, .bin, .ccard, .piece, .sortCard, .why, .look, .slot.filled { border: 3px solid var(--line) !important; box-shadow: 3px 3px 0 var(--line); }
+  .opt { border-radius: 14px; }
+  .opt:active, .bin:active, .ccard:active, .piece:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
+  .opt.right { background: #DCFCE7; } .opt.wrong { background: #FEE2E2; }
+  .next { border: 3px solid var(--line); box-shadow: 4px 4px 0 var(--line); background: #FACC15; color: var(--line); }
+  .next.gray { background: #fff; box-shadow: 4px 4px 0 var(--line); }
+  .speak { border: 3px solid var(--line); background: #fff; padding: .35rem; box-shadow: 2px 2px 0 var(--line); }
+  #sheetHead .speak { font-size: 1.1rem; }
+  .tag { border: 2px solid var(--line); box-shadow: 2px 2px 0 var(--line); }
+  .look .lfi { width: 1.7rem; height: 1.7rem; flex: none; }
+  .why { display: flex; gap: .6rem; align-items: center; background: #fff; }
+  .why.hint { background: #FEF9C3; }
+  .why .mi { width: 2rem; height: 2rem; flex: none; }
+  .why.done { flex-direction: column; background: #fff; }
+  .why.done .cheer { width: 6rem; height: 6.6rem; animation: bob 1.2s ease-in-out infinite; }
+  .why.done .stars { display: flex; gap: .3rem; }
+  .why.done .stars .st { width: 2.4rem; height: 2.4rem; display: block; }
+  .intro h3 { font-size: 1.55rem; }
+  .introRow { display: flex; align-items: flex-end; gap: .8rem; margin: .4rem 0 .8rem; }
+  .host { width: 7.5rem; height: 8.2rem; flex: none; animation: bob 1.6s ease-in-out infinite; }
+  .bubble { position: relative; flex: 1; background: #fff; border: 3px solid var(--line); border-radius: 18px; box-shadow: 4px 4px 0 var(--line); padding: .5rem .8rem; text-align: left; }
+  .bubble::before { content: ""; position: absolute; left: -16px; bottom: 26px; border: 10px solid transparent; border-right: 14px solid var(--line); }
+  .bubble::after { content: ""; position: absolute; left: -10px; bottom: 28px; border: 8px solid transparent; border-right: 11px solid #fff; }
+  .bubble .q { margin: 0; }
+  .group { background: #fff; border: 2px dashed #b9aa9a; display: inline-flex; gap: .15rem; padding: .35rem .45rem; }
+  .group .it { width: 1.5rem; height: 1.5rem; display: inline-block; }
+  .bin { background: #fff; border-radius: 18px; padding: .5rem .4rem .7rem; }
+  .bin .be { width: 5rem; height: 5.5rem; display: block; }
+  .sortCard { border-radius: 12px; background: #fff; }
+  .sortCard.env { position: relative; background: #FFF4DC; padding: 1.2rem 2.4rem 1rem 1.4rem; }
+  .sortCard.env::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 1rem; background: linear-gradient(160deg, transparent 49%, rgba(27,40,54,.25) 50%, transparent 54%) left / 50% 100% no-repeat, linear-gradient(200deg, transparent 49%, rgba(27,40,54,.25) 50%, transparent 54%) right / 50% 100% no-repeat; }
+  .sortCard.env::after { content: ""; position: absolute; right: .5rem; top: .5rem; width: 1.3rem; height: 1.5rem; background: #E5484D; border: 2px solid var(--line); outline: 2px dashed #fff; outline-offset: -5px; }
+  .track { height: 6.5rem; background: linear-gradient(#cfe3c0, #cfe3c0) center bottom 6px / 100% .6rem no-repeat; }
+  .track span { width: 5rem; height: 5.5rem; top: 0; }
+  .cop { left: 4%; } .thief { left: 80%; }
+  .ccard { border-radius: 14px; padding-right: 2.2rem; }
+  .ccard .badge { width: 1.8rem; height: 1.8rem; right: .35rem; top: .35rem; }
+  .ccard.caught { background: #FEE2E2; } .ccard.good { background: #DCFCE7; }
+  .targets { gap: .6rem; }
+  .targets .tg { width: 4.6rem; height: 5rem; }
+  .who1 { display: flex; align-items: center; gap: .5rem; }
+  .who1 .wi { width: 2.2rem; height: 2.2rem; flex: none; }
+  #toast { border: 3px solid var(--line); box-shadow: 5px 5px 0 var(--line); }
+  #toast .big { width: 5rem; height: 5.5rem; margin: 0 auto .3rem; }
+  .pthumb svg { width: 2.2rem; height: 2.2rem; }
+  .combo .slotc { border-color: var(--line); }
   #err { position: fixed; inset: 0; display: none; place-items: center; background: var(--paper); padding: 2rem; text-align: center; z-index: 50; }
 </style>
 </head>
@@ -229,6 +283,7 @@
 <script src="vendor/three.min.js"></script>
 <script src="data/tour.js"></script>
 <script src="js/zhuyin.js"></script>
+<script src="js/art.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

@@ -15,6 +15,7 @@
 | --- | --- |
 | `data/tour.js` | **路線、站點、題目**（要改題目只改這裡） |
 | `js/game.js` | 3D 畫面與互動 |
+| `js/art.js` | 小遊戲的角色與圖示（SVG，風格照 class-games） |
 | `index.html` | 頁面與樣式 |
 | `js/zhuyin.js` | 注音字典（由 `tools/build-zhuyin.js` 產生；多音字改 `tools/zhuyin-overrides.js`） |
 | `vendor/three.min.js` | Three.js r149（放在本機，不靠外部 CDN） |

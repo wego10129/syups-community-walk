@@ -14,6 +14,7 @@
  *   sort   ：分類小遊戲，一次出現一張卡，點正確的籃子
  *   catch  ：找出不對的行為，找到越多，警察越接近壞蛋
  *   run    ：連續答題小遊戲，每答對一題，畫面上一個圖示會變化（例如火被澆熄）
+ *   小遊戲的角色與圖案（host、before、after、art、item）都畫在 js/art.js
  *   pick2  ：從選項中選出兩個（地名挑戰：三角埔＋玉潮坑溪＝三玉）
  *   letter ：最後的寫信任務
  *
@@ -112,7 +113,7 @@ window.TOUR = {
           type: "math",
           subject: "數學",
           story: "假設廟裡的供桌上，每一盤放五顆橘子，一共擺了四盤。",
-          emoji: "🍊",
+          item: "orange",
           per: 5,
           groups: 4,
           unit: "顆",
@@ -142,10 +143,10 @@ window.TOUR = {
           subject: "數學",
           title: "幫行員數硬幣",
           story: "銀行裡有好多五元硬幣！每答對一題，就能把硬幣存進一個小豬撲滿。",
-          before: "🐷",
-          after: "💰",
+          host: "banker",
+          before: "pig",
+          after: "pigFull",
           unit: "元",
-          coin: "5️⃣",
           rounds: [
             { q: "有三個五元硬幣，一共幾元？", per: 5, groups: 3 },
             { q: "有六個五元硬幣，一共幾元？", per: 5, groups: 6 },
@@ -177,9 +178,11 @@ window.TOUR = {
           subject: "國語",
           title: "幫郵差分類信件",
           story: "郵差叔叔的信件碎片混在一起了！信的開頭是「稱謂」，結尾是「祝福語」。一起來幫他快速分類好吧！",
+          host: "postman",
+          card: "envelope",
           bins: [
-            { name: "開頭：稱謂", emoji: "👋" },
-            { name: "結尾：祝福語", emoji: "🎁" }
+            { name: "開頭：稱謂", art: "mailboxRed" },
+            { name: "結尾：祝福語", art: "mailboxGreen" }
           ],
           items: [
             { text: "親愛的奶奶：", bin: 0 },
@@ -207,7 +210,7 @@ window.TOUR = {
           type: "math",
           subject: "數學",
           story: "假設一張郵票要六元，小明要買三張郵票。",
-          emoji: "🪙",
+          item: "coin",
           per: 6,
           groups: 3,
           unit: "元",
@@ -228,6 +231,7 @@ window.TOUR = {
           type: "catch",
           subject: "生活",
           title: "警察抓壞蛋",
+          host: "police",
           story: "警察叔叔要來抓壞蛋了！找出「不對的行為」，每找到一個，警察就離壞蛋更近一步。",
           items: [
             { text: "隨便摸別人的身體", bad: true },
@@ -275,8 +279,9 @@ window.TOUR = {
           subject: "數學",
           title: "幫消防員滅火",
           story: "社區裡有四團火！每答對一題乘法，消防員就能澆熄一團火。",
-          before: "🔥",
-          after: "💨",
+          host: "firefighter",
+          before: "fire",
+          after: "smoke",
           unit: "",
           rounds: [
             { per: 6, groups: 3 },
@@ -309,9 +314,10 @@ window.TOUR = {
           subject: "生活",
           title: "幫館員整理規則",
           story: "館員阿姨想做一張圖書館規則海報。幫她把這些事情分成「可以做」和「不可以做」吧！",
+          host: "librarian",
           bins: [
-            { name: "可以做", emoji: "⭕" },
-            { name: "不可以做", emoji: "❌" }
+            { name: "可以做", art: "signOk" },
+            { name: "不可以做", art: "signNo" }
           ],
           items: [
             { text: "安靜的看書", bin: 0 },
@@ -326,7 +332,7 @@ window.TOUR = {
           type: "math",
           subject: "數學",
           story: "全組有七個小朋友，每個人借三本書。",
-          emoji: "📕",
+          item: "book",
           per: 3,
           groups: 7,
           unit: "本",
@@ -364,8 +370,9 @@ window.TOUR = {
           subject: "數學",
           title: "幫公園種樹",
           story: "公園想多種一些樹！每答對一題乘法，就能種下一棵大樹。",
-          before: "🌱",
-          after: "🌳",
+          host: "kid",
+          before: "sprout",
+          after: "tree",
           unit: "",
           rounds: [
             { per: 8, groups: 2 },
@@ -397,6 +404,7 @@ window.TOUR = {
           type: "pick2",
           subject: "生活",
           title: "三玉的祕密",
+          host: "kid",
           story: "三玉國小的名字，藏著兩個老地名！學校這一帶以前叫做「三角埔」，旁邊這條溪叫做「玉潮坑溪」。選出兩個地名，拼出「三玉」吧！",
           options: ["天母", "三角埔", "中山北路", "玉潮坑溪"],
           answer: [1, 3],
@@ -444,11 +452,11 @@ window.TOUR = {
           subject: "國語",
           q: "寫一封感謝信，給今天認識的社區人物！",
           recipients: [
-            { name: "郵差叔叔", emoji: "📮", lines: ["謝謝您每天幫大家送信和包裹。", "下雨天送信很辛苦，謝謝您。"] },
-            { name: "警察阿姨", emoji: "👮", lines: ["謝謝您保護社區的安全。", "謝謝您在路口幫我們過馬路。"] },
-            { name: "消防員叔叔", emoji: "🚒", lines: ["謝謝您不怕危險，幫大家救火。", "謝謝您隨時準備好幫助別人。"] },
-            { name: "圖書館阿姨", emoji: "📚", lines: ["謝謝您幫我們找到好看的書。", "謝謝您把圖書館整理得好乾淨。"] },
-            { name: "銀行叔叔", emoji: "🏦", lines: ["謝謝您幫大家把錢存好。", "謝謝您耐心的回答我們的問題。"] }
+            { name: "郵差叔叔", icon: "post", lines: ["謝謝您每天幫大家送信和包裹。", "下雨天送信很辛苦，謝謝您。"] },
+            { name: "警察阿姨", icon: "police", lines: ["謝謝您保護社區的安全。", "謝謝您在路口幫我們過馬路。"] },
+            { name: "消防員叔叔", icon: "fire", lines: ["謝謝您不怕危險，幫大家救火。", "謝謝您隨時準備好幫助別人。"] },
+            { name: "圖書館阿姨", icon: "library", lines: ["謝謝您幫我們找到好看的書。", "謝謝您把圖書館整理得好乾淨。"] },
+            { name: "銀行叔叔", icon: "bank", lines: ["謝謝您幫大家把錢存好。", "謝謝您耐心的回答我們的問題。"] }
           ],
           greeting: "您好！",
           blessing: ["祝您", "平安快樂"]
