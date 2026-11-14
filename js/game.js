@@ -8,6 +8,8 @@
   var ST = TOUR.stations;
   // ?share：給家長看的唯讀分享頁（只顯示 share/photos.json 裡的地點照片，不顯示作答與學生資料）
   var SHARE = /[?&]share\b/.test(location.search);
+  // ?student：學生平板專用網址，直接進入「踏查後・學生平板」，不跳出選單、不能切換方式
+  var STUDENT = !SHARE && /[?&]student\b/.test(location.search);
   var KEY = SHARE ? "community-walk-share" : "community-walk-v2";
   // 畫面風格數值（黏土玩具感）：亮度、三盞燈強度、材質霧面程度
   var LOOK = {
@@ -37,11 +39,24 @@
     }
   } catch (e) {}
   if (SHARE) { state.mode = "share"; state.teacher = true; }
+  var teacherSaved = state.teacher, modeSaved = state.mode, bigSaved = state.big;
+  if (STUDENT) {
+    if (state.mode && state.mode !== "postTab") state.atBy[state.mode] = state.at;
+    if (state.mode !== "postTab") { state.at = state.atBy.postTab || 0; state.big = false; }
+    state.mode = "postTab";
+    state.teacher = false;
+  }
   state.phase = state.mode === "postBig" || state.mode === "postTab" ? "post" : state.mode ? "pre" : null;
   if (!(state.at >= 0 && state.at < window.TOUR.stations.length)) state.at = 0;
   function save() {
     if (state.mode) state.atBy[state.mode] = state.at;
-    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
+    // 學生網址只存學生平板的進度，不改掉老師在這台裝置上的設定
+    var out = state;
+    if (STUDENT) {
+      out = Object.assign({}, state, { teacher: teacherSaved, mode: modeSaved || "postTab", big: modeSaved && modeSaved !== "postTab" ? bigSaved : state.big });
+      if (modeSaved && modeSaved !== "postTab") out.at = state.atBy[modeSaved] || 0;
+    }
+    try { localStorage.setItem(KEY, JSON.stringify(out)); } catch (e) {}
   }
 
   /* ---------- 小工具 ---------- */
@@ -938,7 +953,7 @@
     $("titleText").innerHTML = zy(TOUR.title);
     $("subText").textContent = SHARE ? "給家長：我們走過的社區" : TOUR.subtitle;
     var mc = $("modeChip");
-    if (MODES[state.mode]) { mc.hidden = false; mc.className = "modeChip m-" + state.mode; mc.innerHTML = "<b>" + MODES[state.mode].name + "</b><small>" + MODES[state.mode].who + "・點這裡切換</small>"; }
+    if (MODES[state.mode]) { mc.hidden = false; mc.className = "modeChip m-" + state.mode; mc.innerHTML = "<b>" + MODES[state.mode].name + "</b><small>" + MODES[state.mode].who + (STUDENT ? "" : "・點這裡切換") + "</small>"; }
     else mc.hidden = true;
   }
   // 使用方式視窗（照 info-class 選單樣式）：每次打開都會跳出，各方式的進度分開顯示
@@ -979,6 +994,24 @@
       var go = el("button", "diff", "<span>" + (pg.n ? "▶ 繼續" : "▶ 開始") + "<small>" + pg.text + '</small></span><span class="lv-r"><span class="dots">' + dots + "</span></span>");
       go.onclick = function () { setMode(key, false); };
       body.appendChild(go);
+      if (key === "postTab") {
+        // 學生專用網址：學生平板打開這個網址，就直接進入學生平板，不會看到這個選單
+        var url = location.href.split("#")[0].split("?")[0] + "?student";
+        var link = el("div", "stuLink");
+        link.innerHTML = "<b>學生專用網址</b><code>" + esc(url) + "</code>";
+        var cp = el("button", "btn sm", "複製網址");
+        cp.onclick = function () {
+          var ok = function () { cp.textContent = "已複製"; setTimeout(function () { cp.textContent = "複製網址"; }, 2000); };
+          try { navigator.clipboard.writeText(url).then(ok, function () { selectCode(); }); } catch (e) { selectCode(); }
+        };
+        function selectCode() {
+          var r = document.createRange(); r.selectNodeContents(link.querySelector("code"));
+          var sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+          cp.textContent = "請按住網址複製";
+        }
+        link.appendChild(cp);
+        body.appendChild(link);
+      }
       if (pg.n) {
         var again = el("button", "btn sm again", "從頭開始");
         var armed = false;
@@ -1072,7 +1105,7 @@
   $("teacherBtn").onclick = function () { state.teacher = !state.teacher; refresh(); };
   $("photoBtn").onclick = function () { closeMenu(); openPhotoPanel(); };
   $("modeBtn").onclick = showModes;
-  $("modeChip").onclick = showModes;
+  $("modeChip").onclick = function () { if (!STUDENT) showModes(); };
   var resetArmed = false;
   $("resetBtn").onclick = function () {
     if (!resetArmed) {
@@ -2292,6 +2325,7 @@
   refresh();
   loop();
   if (SHARE) document.body.classList.add("share");
+  else if (STUDENT) { document.body.classList.add("student"); onResize(); }
   else showModes();
   if (SHARE) {
     // 分享頁只讀公開的 share/photos.json，不讀這台裝置裡的照片
