@@ -6,13 +6,24 @@
   "use strict";
   var TOUR = window.TOUR;
   var ST = TOUR.stations;
-  var KEY = "community-walk-v2";
+  // ?share：給家長看的唯讀分享頁（只顯示 share/photos.json 裡的地點照片，不顯示作答與學生資料）
+  var SHARE = /[?&]share\b/.test(location.search);
+  var KEY = SHARE ? "community-walk-share" : "community-walk-v2";
+  // 畫面風格數值（黏土玩具感）：亮度、三盞燈強度、材質霧面程度
+  var LOOK = {
+    exposure: 0.65, hemi: 0.55, sun: 0.95, fill: 0.22, rough: 0.78, fogNear: 110, fogFar: 230,
+    // 色票：大面積的地面、草地、道路、溪水（色調映射會讓顏色變淡，所以這裡比較飽和）
+    ground: 0x96d46e, lawn: 0x7cc75a, road: 0xf6cf8a, water: 0x4db6ea
+  };
 
   /* ---------- 進度（只存在這台裝置的瀏覽器裡） ---------- */
-  var state = { done: {}, at: 0, big: false, teacher: false, zhuyin: true };
+  // phase：pre＝出發前（老師大屏，只看不答）、post＝踏查後（作答拿印章）；null＝還沒選
+  var state = { done: {}, seen: {}, at: 0, big: false, teacher: false, zhuyin: true, phase: null };
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || "null");
     if (saved) state = Object.assign(state, saved);
+    if (!state.seen) state.seen = {};
+    if (SHARE) { state.phase = "pre"; state.teacher = true; }
   } catch (e) {}
   function save() {
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
@@ -69,6 +80,7 @@
       kidCheer: function () { return ART.kid("cheer"); }
     };
     if (m[key]) return m[key]();
+    if (/^money\d+$/.test(key)) return ART.money(+key.slice(5));
     if (ART[key]) return ART[key]();
     return "";
   }
@@ -189,6 +201,8 @@
   /* ---------- 3D 場景 ---------- */
   var canvas = $("scene");
   var renderer;
+  // 黏土感：顏色用 sRGB 色彩管理，再經 ACES 色調映射，亮部不會過曝
+  THREE.ColorManagement.legacyMode = false;
   try {
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
   } catch (e) {
@@ -196,14 +210,21 @@
     return;
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = LOOK.exposure;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   var scene = new THREE.Scene();
   scene.background = new THREE.Color(0xd6ecfb);
-  scene.fog = new THREE.Fog(0xd6ecfb, 80, 170);
+  scene.fog = new THREE.Fog(0xd6ecfb, LOOK.fogNear, LOOK.fogFar);
   var camera = new THREE.PerspectiveCamera(45, 1, 0.5, 400);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x9c8f78, 0.5));
-  var sun = new THREE.DirectionalLight(0xfff1dc, 0.62);
+  // 三盞燈：半球光（天空／地面反光）＋暖色主光（投影）＋冷色補光（讓背光面不死黑）
+  scene.add(new THREE.HemisphereLight(0xeaf4ff, 0xb2c08f, LOOK.hemi));
+  var fill = new THREE.DirectionalLight(0xbcd4ff, LOOK.fill);
+  fill.position.set(40, 30, -35);
+  scene.add(fill);
+  var sun = new THREE.DirectionalLight(0xfff0d8, LOOK.sun);
   sun.position.set(-30, 60, 20);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -214,9 +235,14 @@
   sun.shadow.radius = 4;
   scene.add(sun);
 
+  // 站牌、照片等平面標籤：保持原本顏色，不經色調映射
+  function uiSprite(tex) {
+    tex.encoding = THREE.sRGBEncoding;
+    return new THREE.SpriteMaterial({ map: tex, depthTest: false, toneMapped: false });
+  }
   var matCache = {};
   function mat(color) {
-    if (!matCache[color]) matCache[color] = new THREE.MeshLambertMaterial({ color: color });
+    if (!matCache[color]) matCache[color] = new THREE.MeshStandardMaterial({ color: color, roughness: LOOK.rough, metalness: 0 });
     return matCache[color];
   }
   // 圓角方塊：讓建築看起來圓潤（太薄的板子維持一般方塊）
@@ -275,15 +301,18 @@
     return m;
   }
 
-  var ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(0xb5dc96));
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(LOOK.ground));
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  var PARK = { x: 10.5, z: 2, w: 7.5, d: 26 };
-  var parkLawn = new THREE.Mesh(new THREE.PlaneGeometry(PARK.w, PARK.d), mat(0xa5d686));
-  parkLawn.rotation.x = -Math.PI / 2;
-  parkLawn.position.set(PARK.x, 0.02, PARK.z);
-  scene.add(parkLawn);
+  // 公園草地的範圍寫在 data/tour.js 的 park；沒有公園就不畫
+  var PARK = TOUR.park || null;
+  if (PARK) {
+    var parkLawn = new THREE.Mesh(new THREE.PlaneGeometry(PARK.w, PARK.d), mat(LOOK.lawn));
+    parkLawn.rotation.x = -Math.PI / 2;
+    parkLawn.position.set(PARK.x, 0.02, PARK.z);
+    scene.add(parkLawn);
+  }
 
   /* ---------- 路線 ---------- */
   var pts = TOUR.route.map(function (p) { return new THREE.Vector3(p[0], 0, p[1]); });
@@ -320,7 +349,7 @@
     return inside;
   }
 
-  var roadMat = mat(0xf3d7a0);
+  var roadMat = mat(LOOK.road);
   for (i = 1; i < pts.length; i++) {
     var a = pts[i - 1], b = pts[i];
     var seg = new THREE.Mesh(new THREE.BoxGeometry(a.distanceTo(b), 0.08, 2.6), roadMat);
@@ -345,7 +374,7 @@
   var pickables = [];
   var leafCache = {};
   function leafMat(color) {
-    if (!leafCache[color]) leafCache[color] = new THREE.MeshStandardMaterial({ color: color, flatShading: true, roughness: 0.9 });
+    if (!leafCache[color]) leafCache[color] = new THREE.MeshStandardMaterial({ color: color, flatShading: true, roughness: LOOK.rough, metalness: 0 });
     return leafCache[color];
   }
   function tree(x, z, sc, parent) {
@@ -381,10 +410,11 @@
     }
     // 校名與大門
     c.fillStyle = "#f6f1e8"; c.font = "bold 64px " + FONT; c.textAlign = "center"; c.textBaseline = "middle";
-    c.fillText("三 玉 國 小", 512, 120);
+    c.fillText(ST[0].name.split("").join(" "), 512, 120);
     c.fillStyle = "#c9c4bb"; c.fillRect(420, 380, 184, 132);
     c.fillStyle = "#4a3b33"; c.fillRect(440, 400, 144, 112);
     var t = new THREE.CanvasTexture(cv);
+    t.encoding = THREE.sRGBEncoding;
     return t;
   }
 
@@ -394,7 +424,7 @@
       // 前棟（紅磚色、四層樓，正面用畫的窗戶與校名）
       var face = facadeTexture();
       var side = mat(0x7a2e2e);
-      var front = new THREE.Mesh(new THREE.BoxGeometry(11, 5.4, 3), [side, side, mat(0xe9e4dc), side, new THREE.MeshLambertMaterial({ map: face }), side]);
+      var front = new THREE.Mesh(new THREE.BoxGeometry(11, 5.4, 3), [side, side, mat(0xe9e4dc), side, new THREE.MeshStandardMaterial({ map: face, roughness: LOOK.rough, metalness: 0 }), side]);
       front.position.set(0, 2.7, 7.5);
       g.add(front);
       box(11.4, 0.3, 3.4, 0xe9e4dc, 0, 5.4, 7.5, g);
@@ -556,7 +586,7 @@
     var cv = document.createElement("canvas");
     cv.width = 640; cv.height = 220;
     var tex = new THREE.CanvasTexture(cv);
-    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+    var sp = new THREE.Sprite(uiSprite(tex));
     sp.renderOrder = 10;
     var high = stn.noBuilding ? 4.6 : stn.kind === "river" ? 4.6 : 9;
     sp.position.set(stn.pos[0], high, stn.pos[1]);
@@ -587,7 +617,7 @@
       var s = Math.max(W / img.width, H / img.height);
       c.drawImage(img, 20 + (W - img.width * s) / 2, 20 + (H - img.height * s) / 2, img.width * s, img.height * s);
       c.restore();
-      var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+      var sp = new THREE.Sprite(uiSprite(new THREE.CanvasTexture(cv)));
       var h = 4.2, w = h * cv.width / cv.height;
       sp.scale.set(w, h, 1);
       sp.position.set(ST[k].pos[0], 7.4, ST[k].pos[1]);
@@ -601,14 +631,14 @@
     img.src = url;
   }
 
-  var ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.2, 32), new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
+  var ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.2, 32), new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.8, side: THREE.DoubleSide, toneMapped: false }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.12;
   scene.add(ring);
 
   /* ---------- 玉潮坑溪 ---------- */
   var rpts = (TOUR.river || []).map(function (p) { return new THREE.Vector3(p[0], 0, p[1]); });
-  var waterMat = new THREE.MeshLambertMaterial({ color: 0x67bfe3 });
+  var waterMat = new THREE.MeshStandardMaterial({ color: LOOK.water, roughness: 0.5, metalness: 0 });
   for (i = 1; i < rpts.length; i++) {
     var ra = rpts[i - 1], rb = rpts[i];
     var rs = new THREE.Mesh(new THREE.BoxGeometry(ra.distanceTo(rb) + 0.6, 0.06, 1.7), waterMat);
@@ -657,7 +687,7 @@
     var ccv = document.createElement("canvas");
     ccv.width = 640; ccv.height = 300;
     var ctex = new THREE.CanvasTexture(ccv);
-    var csp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ctex, depthTest: false }));
+    var csp = new THREE.Sprite(uiSprite(ctex));
     csp.renderOrder = 8;
     csp.position.set(CENTER.x, 6.2, CENTER.z);
     scene.add(csp);
@@ -681,7 +711,7 @@
 
   /* ---------- 公園的樹、外圍的房子（刻意放少、顏色放淡） ---------- */
   var parkIdx = ST.findIndex(function (s) { return s.kind === "park"; });
-  for (i = 0; i < 24; i++) {
+  for (i = 0; PARK && parkIdx >= 0 && i < 24; i++) {
     var tx = PARK.x - PARK.w / 2 + 0.8 + rnd() * (PARK.w - 1.6);
     var tz = PARK.z - PARK.d / 2 + 0.8 + rnd() * (PARK.d - 1.6);
     if (Math.hypot(tx - ST[parkIdx].pos[0], tz - ST[parkIdx].pos[1]) < 5.5) continue;
@@ -700,7 +730,7 @@
       if (rnd() < 0.4) continue;
       if (distToRoute(x, z) < 5.5 || nearStation(x, z, 7.5) || insideLoop(x, z) || distToRiver(x, z) < 3) continue;
       if (x > 14.5 && x < 33.5 && z > -14 && z < 25) continue; // 學校校地
-      if (Math.abs(x - PARK.x) < PARK.w / 2 + 2 && Math.abs(z - PARK.z) < PARK.d / 2 + 2) continue;
+      if (PARK && Math.abs(x - PARK.x) < PARK.w / 2 + 2 && Math.abs(z - PARK.z) < PARK.d / 2 + 2) continue;
       if (rnd() < 0.35) { tree(x, z, 0.9); continue; }
       var hg = new THREE.Group();
       var hh = 1.4 + rnd() * 1.6, w = 2.6 + rnd() * 1.2, d = 2.6 + rnd();
@@ -765,12 +795,14 @@
 
   /* ---------- 進度判斷 ---------- */
   var walking = false;
+  // 目前這個階段的進度：出發前記「看過」，踏查後記「完成」
+  function prog() { return state.phase === "pre" ? state.seen : state.done; }
   function nextIndex() {
-    for (var k = 0; k < ST.length; k++) if (!state.done[ST[k].id]) return k;
+    for (var k = 0; k < ST.length; k++) if (!prog()[ST[k].id]) return k;
     return -1;
   }
   function stationStatus(k) {
-    if (state.done[ST[k].id]) return "done";
+    if (prog()[ST[k].id]) return "done";
     if (k === state.at && !walking) return "here";
     if (k === nextIndex() || state.teacher) return "next";
     return "locked";
@@ -858,15 +890,50 @@
   function chooseStation(k) {
     if (walking) return;
     if (k === state.at) { openStation(k); return; }
-    if (state.teacher || k === nextIndex() || state.done[ST[k].id]) {
-      walkTo(k, function () { if (!state.done[ST[k].id]) openStation(k); });
+    if (state.teacher || k === nextIndex() || prog()[ST[k].id]) {
+      walkTo(k, function () { if (!prog()[ST[k].id]) openStation(k); });
     } else toast(ART.kid(), "先完成前面的站，再來這裡喔！");
   }
 
   /* ---------- 介面 ---------- */
+  var MODES = {
+    pre: { name: "出發前・行前說明", who: "老師大屏", note: "帶全班看路線、規則和每一站要做的事。只看不答。", icon: "map" },
+    postBig: { name: "踏查後・全班回顧", who: "老師大屏", note: "回到教室，全班一起作答、拿印章。", icon: "kidCheer" },
+    postTab: { name: "踏查後・學生平板", who: "學生平板", note: "每個人用自己的平板作答，最後寫明信片交給老師。", icon: "kid" }
+  };
+  function modeKey() { return state.phase === "pre" ? "pre" : state.big ? "postBig" : "postTab"; }
   function setTitle() {
     $("titleText").innerHTML = zy(TOUR.title);
-    $("subText").textContent = TOUR.subtitle;
+    $("subText").textContent = SHARE ? "給家長：我們走過的社區" : TOUR.subtitle + (state.phase ? "　｜　" + MODES[modeKey()].name : "");
+  }
+  // 開場：選擇使用方式
+  function showModes() {
+    closeMenu();
+    var box_ = $("modeBox");
+    box_.innerHTML = "";
+    box_.appendChild(el("h2", "", zy(TOUR.title)));
+    box_.appendChild(el("p", "note", "請老師選擇這次的使用方式（之後可以在 ⚙️ 裡切換）"));
+    Object.keys(MODES).forEach(function (key) {
+      var m = MODES[key];
+      var b = el("button", "modeOpt" + (state.phase && key === modeKey() ? " on" : ""),
+        '<span class="mi">' + art(m.icon) + '</span><span class="mt"><b>' + m.name + "</b><em>" + m.who + "</em><small>" + m.note + "</small></span>");
+      b.onclick = function () { setMode(key); };
+      box_.appendChild(b);
+    });
+    $("modeScreen").classList.add("show");
+  }
+  function setMode(key) {
+    var phase = key === "pre" ? "pre" : "post";
+    if (phase !== state.phase) {
+      state.at = 0;
+      walkS = walkTarget = cum[ST[0].at];
+    }
+    state.phase = phase;
+    state.big = key !== "postTab";
+    $("modeScreen").classList.remove("show");
+    refresh();
+    onResize();
+    if (phase === "pre" && nextIndex() === 0) openStation(0);
   }
   document.title = TOUR.title + "地圖";
   var stampBox = $("stamps");
@@ -879,7 +946,7 @@
   function refresh() {
     setTitle();
     ST.forEach(function (stn, k) {
-      stampBox.children[k].classList.toggle("done", !!state.done[stn.id]);
+      stampBox.children[k].classList.toggle("done", !!prog()[stn.id]);
       drawSign(k);
     });
     drawCenter();
@@ -887,8 +954,8 @@
     go.disabled = walking;
     var label;
     if (walking) label = "走路中…";
-    else if (n === -1) label = "踏查完成！";
-    else if (n === state.at) label = "開始任務：" + ST[n].name;
+    else if (n === -1) label = state.phase === "pre" ? "說明完了，出發去踏查！" : "踏查完成！";
+    else if (n === state.at) label = (state.phase === "pre" ? "看看這一站：" : "開始任務：") + ST[n].name;
     else label = "▶ 走到下一站：" + ST[n].name;
     go.innerHTML = zy(label);
     var ns = n === -1 ? null : ST[n];
@@ -902,7 +969,7 @@
     jl.innerHTML = "";
     if (state.teacher) {
       ST.forEach(function (stn, k) {
-        var b = el("button", "jump", (state.done[stn.id] ? "✅ " : stn.emoji + " ") + stn.name);
+        var b = el("button", "jump", (prog()[stn.id] ? "✅ " : stn.emoji + " ") + stn.name);
         b.onclick = function () { chooseStation(k); };
         jl.appendChild(b);
       });
@@ -927,6 +994,7 @@
   $("zyBtn").onclick = function () { state.zhuyin = !state.zhuyin; refresh(); };
   $("teacherBtn").onclick = function () { state.teacher = !state.teacher; refresh(); };
   $("photoBtn").onclick = function () { closeMenu(); openPhotoPanel(); };
+  $("modeBtn").onclick = showModes;
   var resetArmed = false;
   $("resetBtn").onclick = function () {
     if (!resetArmed) {
@@ -937,7 +1005,8 @@
     }
     resetArmed = false;
     $("resetBtn").textContent = "🔄 重新開始";
-    state.done = {}; state.at = 0;
+    if (state.phase === "pre") state.seen = {}; else state.done = {};
+    state.at = 0;
     walkS = walkTarget = cum[ST[0].at];
     closeMenu();
     refresh();
@@ -996,6 +1065,19 @@
       $("photoMsg").textContent = "已匯出。如果沒有出現下載，請改用 GitHub 網址版開啟。";
     } catch (e) { $("photoMsg").textContent = "這個環境不能下載檔案，請改用 GitHub 網址版開啟。"; }
   };
+  $("shareBtn").onclick = function () {
+    if (!$("shareOk").checked) { $("photoMsg").textContent = "請先勾選確認：照片裡沒有學生的臉、名牌和班級。"; return; }
+    var only = {};
+    ST.forEach(function (stn) { if (photos[stn.id]) only[stn.id] = photos[stn.id]; });
+    try {
+      var blob = new Blob([JSON.stringify({ app: "community-walk", kind: "share", title: TOUR.title, photos: only })], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "photos.json";
+      document.body.appendChild(a); a.click(); a.remove();
+      $("photoMsg").innerHTML = "已匯出 photos.json。請把它上傳到 GitHub 專案的 <b>share</b> 資料夾，家長連結是：<br><code>" + esc(location.origin + location.pathname + "?share") + "</code>";
+    } catch (e) { $("photoMsg").textContent = "這個環境不能下載檔案，請改用 GitHub 網址版開啟。"; }
+  };
   $("importInput").onchange = function () {
     var f = this.files[0];
     if (!f) return;
@@ -1019,6 +1101,8 @@
     closeMenu();
     cur = { k: k, step: 0 };
     $("card").classList.add("show");
+    if (SHARE) { openShareCard(k); return; }
+    if (state.phase === "pre") { openPreview(k); return; }
     if (state.done[ST[k].id]) {
       head();
       var body = el("div");
@@ -1032,6 +1116,86 @@
       return;
     }
     renderTask();
+  }
+  /* 出發前：每一站只看要做什麼，不作答 */
+  function taskSummary(t) {
+    if (t.type === "info") return null;
+    if (t.type === "letter") return "寫一張明信片，謝謝社區裡幫助我們的人";
+    if (t.title) return "小遊戲：" + t.title;
+    if (t.type === "order") return "把詞語排成通順的句子";
+    if (t.type === "choice" || t.type === "pick2") return "想一想：" + (t.q || t.story);
+    return "算一算：" + (t.preview || t.ask || t.q || "數學小任務");
+  }
+  function openPreview(k) {
+    closeMenu();
+    cur = { k: k, step: 0, preview: true };
+    $("card").classList.add("show");
+    head();
+    var stn = ST[k], body = el("div", "tbody preview"), say = [];
+    sheet.appendChild(body);
+    if (k === 0 && TOUR.rules) {
+      body.appendChild(el("div", "step", zy("出發前，我們約好：")));
+      var ol = el("ol", "rules");
+      TOUR.rules.forEach(function (r) { ol.appendChild(el("li", "", zy(r))); say.push(r); });
+      body.appendChild(ol);
+      body.appendChild(el("div", "step", zy("今天要去的地方：")));
+      var rl = el("div", "routeList");
+      ST.forEach(function (s2, j) {
+        if (j === 0 || s2.noBuilding) return;
+        rl.appendChild(el("span", "rstop", '<span class="ri">' + ART.iconFor(s2) + "</span>" + zy(s2.name)));
+      });
+      body.appendChild(rl);
+    } else {
+      body.appendChild(el("div", "step", zy(stn.noBuilding ? "回到學校以後，我們要：" : "到了這一站，我們要：")));
+      var ul = el("ul", "todo");
+      stn.tasks.forEach(function (t) {
+        var line = taskSummary(t);
+        if (!line) return;
+        ul.appendChild(el("li", "", '<span class="tag ' + (t.subject || "生活") + '">' + zy(t.subject || "生活") + "</span><span>" + zy(line) + "</span>"));
+        say.push(line);
+      });
+      body.appendChild(ul);
+    }
+    var f = foot(body);
+    var sp = el("button", "next gray", zy("念給大家聽"));
+    sp.onclick = function () { speak((stn.lookFor ? stn.lookFor + "。" : "") + say.join("。")); };
+    f.appendChild(sp);
+    var ok = el("button", "next", zy(k === 0 ? "約好了 ▶" : "看完了 ▶"));
+    ok.onclick = function () {
+      state.seen[stn.id] = true;
+      closeCard();
+      if (nextIndex() === -1) toast(ART.kid("cheer"), "每一站都看過了，準備出發去踏查！");
+    };
+    f.appendChild(ok);
+  }
+  /* 家長分享頁：每一站顯示照片和孩子在這裡學了什麼，沒有題目答案 */
+  function openShareCard(k) {
+    closeMenu();
+    cur = { k: k, step: 1, preview: true };
+    $("card").classList.add("show");
+    head();
+    var stn = ST[k], body = el("div", "tbody preview");
+    sheet.appendChild(body);
+    var learn = stn.tasks.filter(function (t) { return t.type === "choice" && t.why; })[0];
+    if (learn) body.appendChild(qLine(learn.why));
+    body.appendChild(el("div", "step", zy(stn.noBuilding ? "回到學校以後，孩子們：" : "在這一站，孩子們：")));
+    var ul = el("ul", "todo");
+    stn.tasks.forEach(function (t) {
+      var line = taskSummary(t);
+      if (!line) return;
+      ul.appendChild(el("li", "", '<span class="tag ' + (t.subject || "生活") + '">' + zy(t.subject || "生活") + "</span><span>" + zy(line) + "</span>" + (t.lesson ? '<span class="unitchip">' + t.lesson + "</span>" : "")));
+    });
+    body.appendChild(ul);
+    if (!photos[stn.id] && !stn.noBuilding) body.appendChild(el("div", "note", "（這一站還沒有放照片）"));
+    var f = foot(body);
+    var ok = el("button", "next", zy("看下一站 ▶"));
+    ok.onclick = function () {
+      state.seen[stn.id] = true;
+      closeCard();
+      var n = nextIndex();
+      if (n !== -1) chooseStation(n);
+    };
+    f.appendChild(ok);
   }
   function closeCard() {
     $("card").classList.remove("show");
@@ -1055,7 +1219,7 @@
     h.appendChild(el("h2", "", zy(stn.name)));
     var dots = el("div");
     dots.id = "dots";
-    stn.tasks.forEach(function (t, k) { dots.appendChild(el("span", "dot" + (k < cur.step ? " ok" : k === cur.step ? " cur" : ""))); });
+    if (!cur.preview) stn.tasks.forEach(function (t, k) { dots.appendChild(el("span", "dot" + (k < cur.step ? " ok" : k === cur.step ? " cur" : ""))); });
     h.appendChild(dots);
     var x = el("button", "speak", "✕");
     x.setAttribute("aria-label", "關閉");
@@ -1101,7 +1265,8 @@
     var body = el("div", "tbody t-" + t.type);
     sheet.appendChild(body);
     if (t.subject) body.appendChild(el("span", "tag " + t.subject, zy(t.subject)));
-    var fn = { info: taskInfo, choice: taskChoice, math: taskMath, order: taskOrder, letter: taskLetter, sort: gameSort, catch: gameCatch, chase: gameChase, run: gameRun, pick2: taskPick2 }[t.type];
+    unitChip(body, t);
+    var fn = { info: taskInfo, choice: taskChoice, math: taskMath, order: taskOrder, letter: taskLetter, sort: gameSort, catch: gameCatch, chase: gameChase, run: gameRun, pick2: taskPick2, word: taskWord, place: taskPlace, compare: taskCompare, measure: taskMeasure, capacity: taskCapacity, pay: gamePay }[t.type];
     if (t.title && t.story) intro(t, body, fn);
     else fn(t, body);
     sheet.scrollTop = 0;
@@ -1118,7 +1283,7 @@
     row.appendChild(bubble);
     box_.appendChild(row);
     var go = el("button", "next", zy("開始 ▶"));
-    go.onclick = function () { body.innerHTML = ""; body.appendChild(el("span", "tag " + t.subject, zy(t.subject))); fn(t, body); };
+    go.onclick = function () { body.innerHTML = ""; body.appendChild(el("span", "tag " + t.subject, zy(t.subject))); unitChip(body, t); fn(t, body); };
     body.appendChild(box_);
     foot(body).appendChild(go);
   }
@@ -1203,6 +1368,237 @@
         });
       }, 900);
     }, "一份有" + zhNum(t.per) + t.unit + "，有" + zhNum(t.groups) + "份，被乘數寫前面：" + t.per + " × " + t.groups + "。");
+  }
+
+  /* ===== 二上數學題型（依翰林二上第 1～5 單元） ===== */
+  // 加減列式選項：正確、相反的運算、數字看錯（差十）
+  function calc(a, op, b) { return op === "+" ? a + b : a - b; }
+  function sym(op) { return op === "+" ? "＋" : "－"; }
+  function addSubForms(a, op, b) {
+    var f = [a + " " + sym(op) + " " + b];
+    if (op === "+") f.push((a > b ? a + " － " + b : b + " － " + a));
+    else f.push(a + " ＋ " + b);
+    f.push(a + " " + sym(op) + " " + (b + 10));
+    return f;
+  }
+  // 常見的錯：加法忘了進位、減法個位「大減小」
+  function slipAns(a, op, b) {
+    if (op === "+" && a % 10 + b % 10 >= 10) return a + b - 10;
+    if (op === "-" && a % 10 < b % 10) return (Math.floor(a / 10) - Math.floor(b / 10)) * 10 + (b % 10 - a % 10);
+    return null;
+  }
+  function numOptions(ans, extra) {
+    var c = uniq([ans].concat(extra.filter(function (v) { return v != null && v >= 0 && v !== ans; })));
+    return shuffle(c.slice(0, 3));
+  }
+  function unitChip(body, t) { if (t.lesson) body.appendChild(el("span", "unitchip", t.lesson)); }
+
+  // 二位數加減應用題：先列式，再算答案，減法附驗算
+  function taskWord(t, body) {
+    body.appendChild(qLine(t.story, t.story + t.ask));
+    var ans = calc(t.a, t.op, t.b);
+    var area = el("div", "steparea");
+    body.appendChild(area);
+    var forms = addSubForms(t.a, t.op, t.b), order = shuffle([0, 1, 2]);
+    area.appendChild(el("div", "step", zy("第一步：列式")));
+    choiceBlock(area, "要怎麼列式？", order.map(function (k) { return forms[k]; }), order.indexOf(0), function () {
+      setTimeout(function () {
+        area.innerHTML = "";
+        area.appendChild(el("div", "step", zy("第二步：算出答案") + '　<b class="eqs">' + forms[0] + "</b>"));
+        var o2 = numOptions(ans, [slipAns(t.a, t.op, t.b), ans + 10, ans - 10]);
+        choiceBlock(area, t.ask, o2.map(function (n) { return n + " " + t.unit; }), o2.indexOf(ans), function () {
+          area.appendChild(el("div", "why eq", forms[0] + " ＝ " + ans + "　" + zy("答：") + ans + " " + zy(t.unit)));
+          var check = t.op === "-" ? ans + " ＋ " + t.b + " ＝ " + t.a : ans + " － " + t.b + " ＝ " + t.a;
+          area.appendChild(el("div", "why eq check", zy("驗算：") + check + " ✔"));
+          foot(body).appendChild(nextBtn());
+        }, slipAns(t.a, t.op, t.b) != null ? (t.op === "+" ? "個位相加滿十，要進位到十位喔！" : "個位不夠減，要向十位借一個十喔！") : "");
+      }, 900);
+    }, t.why || "");
+  }
+
+  // 幾個百、幾個十、幾個一（200 以內的數）
+  function taskPlace(t, body) {
+    var n = t.h * 100 + t.t * 10 + t.o;
+    body.appendChild(qLine(t.story, t.story + t.ask));
+    var pics = el("div", "placePics");
+    [[t.h, "box100", "一" + t.box + "有一百" + t.unit], [t.t, "bag10", "一" + t.bag + "有十" + t.unit], [t.o, t.item, "一" + t.unit]].forEach(function (g) {
+      if (!g[0]) return;
+      var d = el("div", "pgroup");
+      var row = el("div", "prow3");
+      for (var i = 0; i < g[0]; i++) row.appendChild(el("span", "pit", art(g[1])));
+      d.appendChild(row);
+      d.appendChild(el("div", "plabel", zy(g[2])));
+      pics.appendChild(d);
+    });
+    body.appendChild(pics);
+    var area = el("div", "steparea");
+    body.appendChild(area);
+    function pv(h, tt, o) { return h + " 個百、" + tt + " 個十、" + o + " 個一"; }
+    var f1 = uniq([pv(t.h, t.t, t.o), pv(t.h, t.o, t.t), pv(t.t, t.h, t.o)]);
+    var ord = shuffle(f1.map(function (_, k) { return k; }));
+    area.appendChild(el("div", "step", zy("第一步：數一數")));
+    choiceBlock(area, "有幾個百、幾個十、幾個一？", ord.map(function (k) { return f1[k]; }), ord.indexOf(0), function () {
+      setTimeout(function () {
+        area.innerHTML = "";
+        area.appendChild(el("div", "step", zy("第二步：寫成數字") + '　<b class="eqs">' + pv(t.h, t.t, t.o) + "</b>"));
+        var o2 = numOptions(n, [t.h * 100 + t.o * 10 + t.t, t.t * 100 + t.h * 10 + t.o, n - 100 * t.h + 10]);
+        choiceBlock(area, t.ask, o2.map(function (v) { return v + " " + t.unit; }), o2.indexOf(n), function () {
+          area.appendChild(el("div", "why eq", pv(t.h, t.t, t.o) + " 是 " + n));
+          foot(body).appendChild(nextBtn());
+        });
+      }, 900);
+    });
+  }
+
+  // 數的大小比較：＞、＜、＝
+  function taskCompare(t, body) {
+    body.appendChild(qLine(t.q));
+    var area = el("div", "steparea");
+    body.appendChild(area);
+    var i = 0;
+    function round() {
+      area.innerHTML = "";
+      if (i >= t.pairs.length) { area.appendChild(doneMsg("比完了！")); foot(body).appendChild(nextBtn()); return; }
+      var pr = t.pairs[i];
+      var row = el("div", "cmp");
+      row.innerHTML = '<div class="cside">' + zy(pr.la) + "<b>" + pr.a + "</b></div>" + '<div class="csym">○</div><div class="cside">' + zy(pr.lb) + "<b>" + pr.b + "</b></div>";
+      area.appendChild(row);
+      var ans = pr.a > pr.b ? 0 : pr.a < pr.b ? 1 : 2;
+      choiceBlock(area, "○ 裡面要填什麼？", ["＞ 大於", "＜ 小於", "＝ 等於"], ans, function () {
+        row.querySelector(".csym").textContent = ["＞", "＜", "＝"][ans];
+        row.querySelector(".csym").classList.add("on");
+        i++;
+        setTimeout(round, 1600);
+      }, "先比百位，一樣再比十位，再比個位。");
+    }
+    round();
+  }
+
+  // 量一量：用尺量長度（公分）
+  function rulerSvg(start, len, item) {
+    var u = 30, W = 16 * u + 20, x0 = 10, h = "";
+    h += '<rect x="' + x0 + '" y="46" width="' + 15 * u + '" height="34" rx="4" fill="#FEF3C7" stroke="#1B2836" stroke-width="2.5"/>';
+    for (var c = 0; c <= 15; c++) {
+      var x = x0 + c * u;
+      h += '<line x1="' + x + '" y1="46" x2="' + x + '" y2="' + (c % 5 === 0 ? 64 : 58) + '" stroke="#1B2836" stroke-width="2"/>';
+      h += '<text x="' + x + '" y="77" font-size="12" font-family="Arial" text-anchor="middle" fill="#1B2836">' + c + "</text>";
+      if (c < 15) h += '<line x1="' + (x + u / 2) + '" y1="46" x2="' + (x + u / 2) + '" y2="53" stroke="#1B2836" stroke-width="1.2"/>';
+    }
+    var colors = { pencil: ["#F6C445", "#FDE68A"], leaf: ["#4F9A55", "#86C779"], crayon: ["#E5484D", "#F9A8A8"] }[item] || ["#4A7FC1", "#93C5FD"];
+    var xa = x0 + start * u, xb = x0 + (start + len) * u;
+    h += '<rect x="' + xa + '" y="18" width="' + (xb - xa) + '" height="22" rx="11" fill="' + colors[0] + '" stroke="#1B2836" stroke-width="3"/>';
+    h += '<rect x="' + (xa + 8) + '" y="23" width="' + Math.max(0, xb - xa - 16) + '" height="6" rx="3" fill="' + colors[1] + '"/>';
+    h += '<line x1="' + xa + '" y1="40" x2="' + xa + '" y2="46" stroke="#E8704A" stroke-width="3"/><line x1="' + xb + '" y1="40" x2="' + xb + '" y2="46" stroke="#E8704A" stroke-width="3"/>';
+    return '<svg viewBox="0 0 ' + W + ' 86" class="ruler">' + h + "</svg>";
+  }
+  function taskMeasure(t, body) {
+    body.appendChild(qLine(t.q));
+    var area = el("div", "steparea");
+    body.appendChild(area);
+    var i = 0;
+    function round() {
+      area.innerHTML = "";
+      if (i >= t.rounds.length) { area.appendChild(doneMsg("量完了！")); foot(body).appendChild(nextBtn()); return; }
+      var r = t.rounds[i];
+      area.appendChild(el("div", "step", zy("第" + zhNum(i + 1) + "題：" + r.name + "有多長？")));
+      area.appendChild(el("div", "rulerBox", rulerSvg(r.start, r.len, r.item)));
+      var o = numOptions(r.len, r.start ? [r.start + r.len, r.len + 1] : [r.len + 1, r.len - 1]);
+      choiceBlock(area, "", o.map(function (v) { return v + " 公分"; }), o.indexOf(r.len), function () {
+        area.appendChild(el("div", "why eq", r.start ? "從 " + r.start + " 量到 " + (r.start + r.len) + "，數一數有 " + r.len + " 個 1 公分" : "從 0 量到 " + r.len + "，是 " + r.len + " 公分"));
+        i++;
+        setTimeout(round, 2000);
+      }, r.start ? "不是從 0 開始量，要數中間有幾個 1 公分喔！" : "看尾巴對到尺上的哪一個數字。");
+    }
+    round();
+  }
+
+  // 容量比較：用杯子當單位
+  function taskCapacity(t, body) {
+    body.appendChild(qLine(t.story));
+    var box_ = el("div", "caps");
+    t.items.forEach(function (it) {
+      var c = el("div", "cap");
+      c.appendChild(el("div", "cimg", art(it.art)));
+      c.appendChild(el("div", "cname", zy(it.name)));
+      var cups = el("div", "cups");
+      for (var k = 0; k < it.cups; k++) cups.appendChild(el("span", "pit", art("cup")));
+      c.appendChild(cups);
+      c.appendChild(el("div", "plabel", zy("倒滿要" + zhNum(it.cups) + "杯")));
+      box_.appendChild(c);
+    });
+    body.appendChild(box_);
+    var area = el("div", "steparea");
+    body.appendChild(area);
+    var big = t.items.reduce(function (m, it, k) { return it.cups > t.items[m].cups ? k : m; }, 0);
+    choiceBlock(area, "哪一個裝的水比較多？", t.items.map(function (it) { return it.name; }), big, function () {
+      setTimeout(function () {
+        var a = t.items[big].cups, b = t.items[1 - big].cups, d = a - b;
+        area.innerHTML = "";
+        var o = numOptions(d, [a + b, d + 1]);
+        choiceBlock(area, t.items[big].name + "比" + t.items[1 - big].name + "多裝幾杯？", o.map(function (v) { return v + " 杯"; }), o.indexOf(d), function () {
+          area.appendChild(el("div", "why eq", a + " － " + b + " ＝ " + d + "　" + zy("答：多") + d + " " + zy("杯")));
+          foot(body).appendChild(nextBtn());
+        });
+      }, 900);
+    }, "倒滿要的杯數越多，裝的水就越多。");
+  }
+
+  // 付錢小遊戲：點錢幣放進托盤，剛好就付錢
+  function gamePay(t, body) {
+    var r = 0;
+    var top = el("div", "runTop");
+    top.appendChild(el("div", "gtitle", zy(t.title)));
+    var row = el("div", "targets");
+    t.rounds.forEach(function () { row.appendChild(el("span", "tg", art(t.before))); });
+    top.appendChild(row);
+    body.appendChild(top);
+    var area = el("div", "steparea");
+    body.appendChild(area);
+    function round() {
+      area.innerHTML = "";
+      if (r >= t.rounds.length) { area.appendChild(doneMsg("任務完成！")); foot(body).appendChild(nextBtn()); return; }
+      var rd = t.rounds[r], paid = [];
+      area.appendChild(qLine("第" + zhNum(r + 1) + "題：" + rd.q));
+      var tray = el("div", "tray");
+      area.appendChild(tray);
+      var coins = el("div", "coins");
+      (t.coins || [1, 5, 10, 50, 100]).forEach(function (v) {
+        var b = el("button", "coinBtn" + (v === 100 ? " bill" : ""), art("money" + v));
+        b.setAttribute("aria-label", v + "元");
+        b.onclick = function () { if (paid.length >= 12) return; paid.push(v); draw(); };
+        coins.appendChild(b);
+      });
+      area.appendChild(coins);
+      var msgBox = el("div");
+      var ctl = el("div", "payCtl");
+      var back = el("button", "next gray", zy("拿回一個"));
+      back.onclick = function () { paid.pop(); msgBox.innerHTML = ""; draw(); };
+      var pay = el("button", "next", zy("付錢"));
+      pay.onclick = function () {
+        var sum = paid.reduce(function (a, b) { return a + b; }, 0);
+        msgBox.innerHTML = "";
+        if (!paid.length) return;
+        if (sum === rd.price) {
+          var tg = row.children[r];
+          tg.innerHTML = art(t.after);
+          tg.classList.add("pop");
+          ctl.remove(); coins.remove();
+          msgBox.appendChild(el("div", "why eq", paid.slice().sort(function (a, b) { return b - a; }).join(" ＋ ") + " ＝ " + rd.price + "　" + zy("剛剛好！")));
+          r++;
+          setTimeout(round, 1800);
+        } else if (sum > rd.price) msgBox.appendChild(hintMsg("給太多了！要付" + zhNum(rd.price) + "元，拿回一些再試試。"));
+        else msgBox.appendChild(hintMsg("還不夠喔！再放一些錢。"));
+      };
+      ctl.appendChild(back); ctl.appendChild(pay);
+      area.appendChild(ctl);
+      area.appendChild(msgBox);
+      function draw() {
+        tray.innerHTML = paid.length ? "" : '<span class="trayHint">' + zy("點下面的錢，放到這裡") + "</span>";
+        paid.forEach(function (v) { tray.appendChild(el("span", "tc" + (v === 100 ? " bill" : ""), art("money" + v))); });
+      }
+      draw();
+    }
+    round();
   }
 
   function taskOrder(t, body) {
@@ -1496,48 +1892,246 @@
     body.appendChild(msg);
   }
 
+  /* ===== 最後一站：寫明信片（稿紙格一格一字，寄出後存成圖片交給老師） ===== */
   function taskLetter(t, body) {
+    var pick = { r: null, lines: [], seat: "", name: "" };
     body.appendChild(qLine(t.q));
     body.appendChild(el("div", "step", zy("第一步：你想寫給誰？")));
     var who = el("div", "who");
     t.recipients.forEach(function (r) {
       var b = el("button", "opt who1", '<span class="wi">' + (ART.icon[r.icon] || ART.icon.letter)() + "</span>" + zy(r.name));
-      b.onclick = function () { pickLine(r); };
+      b.onclick = function () { pick.r = r; pick.lines = []; stepLines(); };
       who.appendChild(b);
     });
     body.appendChild(who);
-    function pickLine(r) {
+
+    function page(title) {
       head();
-      var b2 = el("div");
-      sheet.appendChild(b2);
-      b2.appendChild(el("span", "tag 國語", zy("國語")));
-      b2.appendChild(qLine("第二步：你想跟" + r.name + "說什麼？"));
+      var b = el("div", "tbody t-letter");
+      sheet.appendChild(b);
+      b.appendChild(el("span", "tag 國語", zy("國語")));
+      if (title) b.appendChild(qLine(title));
+      return b;
+    }
+    function stepLines() {
+      var b = page("第二步：你想跟" + pick.r.name + "說什麼？可以選一句或兩句。");
       var o = el("div", "opts");
-      r.lines.forEach(function (line) {
-        var b = el("button", "opt", zy(line));
-        b.onclick = function () { showLetter(r, line); };
-        o.appendChild(b);
+      var go = el("button", "next", zy("下一步 ▶"));
+      go.disabled = true;
+      pick.r.lines.forEach(function (line) {
+        var btn = el("button", "opt", zy(line));
+        btn.onclick = function () {
+          var i = pick.lines.indexOf(line);
+          if (i >= 0) pick.lines.splice(i, 1);
+          else if (pick.lines.length < 2) pick.lines.push(line);
+          Array.prototype.forEach.call(o.children, function (c, k) { c.classList.toggle("right", pick.lines.indexOf(pick.r.lines[k]) >= 0); });
+          go.disabled = !pick.lines.length;
+        };
+        o.appendChild(btn);
       });
-      b2.appendChild(o);
+      b.appendChild(o);
+      go.onclick = stepSign;
+      foot(b).appendChild(go);
     }
-    function showLetter(r, line) {
-      head();
-      var b3 = el("div");
-      sheet.appendChild(b3);
-      b3.appendChild(el("span", "tag 國語", zy("國語")));
-      b3.appendChild(qLine("第三步：寫上你的名字，信就完成了！"));
-      var L = el("div", "letter");
-      L.innerHTML =
-        "<div>" + zy("親愛的" + r.name + "：") + "</div>" +
-        '<div class="ind">' + zy(t.greeting + line) + "</div>" +
-        '<div class="ind">' + zy(t.blessing[0]) + "</div>" +
-        "<div>" + zy(t.blessing[1]) + "</div>" +
-        '<div class="right"><input id="me" placeholder="你的名字" maxlength="8"> ' + zy("敬上") + "</div>" +
-        '<div class="right">' + zy(zhDate()) + "</div>";
-      b3.appendChild(L);
-      b3.appendChild(el("div", "note", zy("名字只會顯示在這台平板上，不會上傳。完成後，照著這個格式把信抄到信紙上，還可以再多寫幾句話！")));
-      foot(b3).appendChild(nextBtn("寫好了"));
+    function stepSign() {
+      var b = page("第三步：寫上你的座號和名字，看看明信片！");
+      var form = el("div", "signRow");
+      form.innerHTML = '<label>' + zy("座號") + ' <input id="seatIn" type="number" inputmode="numeric" min="1" max="40" placeholder="5"></label>' +
+        '<label>' + zy("名字") + ' <input id="nameIn" maxlength="6" placeholder="可以不寫"></label>';
+      b.appendChild(form);
+      var cv = document.createElement("canvas");
+      cv.className = "postcard";
+      b.appendChild(cv);
+      var seatIn = form.querySelector("#seatIn"), nameIn = form.querySelector("#nameIn");
+      seatIn.value = pick.seat; nameIn.value = pick.name;
+      var send = el("button", "next", zy("寄出明信片 ▶"));
+      function upd() {
+        pick.seat = seatIn.value.replace(/\D/g, "").slice(0, 2);
+        pick.name = nameIn.value.trim().slice(0, 6);
+        send.disabled = !pick.seat;
+        drawPostcard(cv, pick, t, false);
+      }
+      seatIn.oninput = upd; nameIn.oninput = upd;
+      upd();
+      b.appendChild(el("div", "note", zy("名字只會留在這台平板上，不會上傳到網路。")));
+      send.onclick = function () { mailIt(cv); };
+      foot(b).appendChild(send);
     }
+    function mailIt(cv) {
+      var b = page("");
+      var stage = el("div", "mailStage");
+      var card = el("img", "flyCard");
+      card.src = cv.toDataURL("image/png");
+      stage.appendChild(card);
+      stage.appendChild(el("div", "mbox", ART.mailbox("green")));
+      b.appendChild(stage);
+      b.appendChild(el("div", "step mailMsg", zy("投進綠色郵筒囉……")));
+      var reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setTimeout(function () { stage.classList.add("go"); }, 60);
+      setTimeout(done, reduce ? 300 : 2100);
+      function done() {
+        var b2 = page("明信片寄出了！郵差蓋上了郵戳。");
+        var cv2 = document.createElement("canvas");
+        cv2.className = "postcard";
+        b2.appendChild(cv2);
+        drawPostcard(cv2, pick, t, true);
+        b2.appendChild(el("div", "note", zy("按「交給老師」，把明信片存成圖片，傳給老師。")));
+        var f = foot(b2);
+        var give = el("button", "next gray", zy("交給老師（存成圖片）"));
+        give.onclick = function () { givePng(cv2, pick, give); };
+        f.appendChild(give);
+        f.appendChild(nextBtn("完成 ▶"));
+      }
+    }
+  }
+  // 明信片圖片：平板可以用「分享」直接傳到 LINE、Google 雲端硬碟或 AirDrop；不行就下載
+  function givePng(cv, pick, btn) {
+    // 檔名用英數字（有些瀏覽器會把中文檔名改成 download）：座號在前，老師收齊後好排序
+    var fname = "postcard-" + (pick.seat.length < 2 ? "0" : "") + pick.seat + "-" + (pick.r.icon || "letter") + ".png";
+    function download(blob) {
+      try {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fname;
+        document.body.appendChild(a); a.click(); a.remove();
+        toast(ART.check(), "已存成圖片：" + fname);
+      } catch (e) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); }
+    }
+    try {
+      cv.toBlob(function (blob) {
+        if (!blob) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); return; }
+        var file = null;
+        try { file = new File([blob], fname, { type: "image/png" }); } catch (e) {}
+        if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+          navigator.share({ files: [file], title: fname }).catch(function () {});
+        } else download(blob);
+      }, "image/png");
+    } catch (e) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); }
+  }
+  // 明信片背面：左邊稿紙格（一格一字＋注音），右邊郵票、郵戳、收件人
+  var stampImgs = {};
+  function drawPostcard(cv, pick, t, stamped) {
+    var W = 1200, H = 800, r = pick.r;
+    cv.width = W; cv.height = H;
+    var c = cv.getContext("2d");
+    var INK = "#1B2836", GRID = "#E8A48A", GRID2 = "#F6D9CB";
+    c.fillStyle = "#FFFDF6"; roundRect(c, 4, 4, W - 8, H - 8, 26); c.fill();
+    c.lineWidth = 6; c.strokeStyle = INK; c.stroke();
+    c.fillStyle = INK; c.font = "bold 22px " + FONT; c.textAlign = "left"; c.textBaseline = "middle";
+    c.fillText("POST CARD", 40, 46);
+    c.font = "20px " + FONT; c.fillText("明信片", 186, 46);
+    // 內容排進格子：一個字（含標點）一格；段落開頭空兩格
+    var COLS = 12, rows = [];
+    function para(text, indent, align) {
+      // 稿紙寫法：兩個阿拉伯數字寫在同一格
+      var cells = ((indent ? "　　" : "") + text).match(/\d{1,2}|[\s\S]/g), line = [];
+      for (var i = 0; i < cells.length; i++) {
+        line.push(cells[i]);
+        if (line.length === COLS) { rows.push({ cells: line }); line = []; }
+      }
+      if (line.length) rows.push({ cells: line, right: align === "right" });
+    }
+    para("親愛的" + r.name + "：", false);
+    para(t.greeting + pick.lines.join(""), true);
+    para(t.blessing[0], true);
+    para(t.blessing[1], false);
+    var who = "二年級" + (pick.seat ? pick.seat + "號" : "＿號") + (pick.name || "") + "敬上";
+    para(who, false, "right");
+    var cw = 61, chB = 43, gx = 40, gy = 82, gh = H - gy - 46;
+    var ch = Math.min(64, Math.floor(gh / Math.max(rows.length, 9)));
+    var nRows = Math.min(Math.floor(gh / ch), Math.max(rows.length + 1, 8));
+    for (var ri = 0; ri < nRows; ri++) {
+      for (var ci = 0; ci < COLS; ci++) {
+        var x = gx + ci * cw, y = gy + ri * ch;
+        c.fillStyle = "#fff"; c.fillRect(x, y + 4, chB, ch - 8);
+        c.lineWidth = 1.5; c.strokeStyle = GRID; c.strokeRect(x, y + 4, chB, ch - 8);
+        c.strokeStyle = GRID2; c.strokeRect(x + chB, y + 4, cw - chB - 2, ch - 8);
+      }
+      var row = rows[ri];
+      if (!row) continue;
+      var off = row.right ? COLS - row.cells.length : 0;
+      var reads = state.zhuyin ? Z.read(row.cells.map(function (x) { return x.length > 1 ? "#" : x; }).join("")) : [];
+      row.cells.forEach(function (chr, k) {
+        var x = gx + (off + k) * cw, y = gy + ri * ch + ch / 2;
+        c.fillStyle = INK; c.textAlign = "center"; c.textBaseline = "middle";
+        c.font = "bold " + Math.round(chB * (chr.length > 1 ? 0.56 : 0.74)) + "px " + FONT;
+        var isP = "，。！：、？".indexOf(chr) >= 0;
+        c.fillText(chr, x + chB / 2 + (isP ? -chB * 0.18 : 0), y + (isP ? chB * 0.12 : 1));
+        var rd = reads[k];
+        if (rd) zyColumn(c, rd, x + chB + (cw - chB) / 2 - 1, y, (ch - 12) / 4.2);
+      });
+    }
+    // 中間分隔線
+    c.strokeStyle = "#C9B9A6"; c.lineWidth = 2; c.setLineDash([10, 8]);
+    c.beginPath(); c.moveTo(800, 70); c.lineTo(800, H - 40); c.stroke(); c.setLineDash([]);
+    // 郵票（齒孔邊）：用收件人那一站的照片，沒有照片就用站的圖示
+    var sx = 1010, sy = 60, sw = 140, sh = 170;
+    c.fillStyle = "#fff";
+    c.beginPath(); c.rect(sx, sy, sw, sh); c.fill();
+    c.fillStyle = "#FFFDF6";
+    for (var p = 0; p <= sw; p += 14) { c.beginPath(); c.arc(sx + p, sy, 5, 0, 7); c.arc(sx + p, sy + sh, 5, 0, 7); c.fill(); }
+    for (p = 0; p <= sh; p += 14) { c.beginPath(); c.arc(sx, sy + p, 5, 0, 7); c.arc(sx + sw, sy + p, 5, 0, 7); c.fill(); }
+    c.strokeStyle = INK; c.lineWidth = 2; c.strokeRect(sx + 10, sy + 10, sw - 20, sh - 20);
+    var stn = ST.filter(function (s) { return s.kind === r.icon; })[0];
+    var src = stn && photos[stn.id] ? photos[stn.id] : null;
+    var key = src ? "p:" + stn.id : "i:" + r.icon;
+    var img = stampImgs[key];
+    if (!img) {
+      img = stampImgs[key] = new Image();
+      img.onload = function () { if (cv.isConnected) drawPostcard(cv, pick, t, stamped); };
+      img.src = src || "data:image/svg+xml;charset=utf-8," + encodeURIComponent((ART.icon[r.icon] || ART.icon.letter)().replace("<svg ", '<svg width="200" height="200" '));
+    }
+    if (img.complete && img.naturalWidth) {
+      var iw = sw - 28, ih = sh - 52, s = src ? Math.max(iw / img.width, ih / img.height) : Math.min(iw / img.width, ih / img.height);
+      c.save(); c.beginPath(); c.rect(sx + 14, sy + 14, iw, ih); c.clip();
+      c.drawImage(img, sx + 14 + (iw - img.width * s) / 2, sy + 14 + (ih - img.height * s) / 2, img.width * s, img.height * s);
+      c.restore();
+    }
+    c.fillStyle = INK; c.font = "bold 18px " + FONT; c.textAlign = "center";
+    c.fillText("社區踏查", sx + sw / 2, sy + sh - 22);
+    // 收件人、寄件人
+    c.textAlign = "left";
+    var stnName = stn ? stn.name : "";
+    [["收件人：", stnName], ["", r.name], ["寄件人：", ST[0].name], ["", "二年級　" + (pick.seat || "＿") + "號　" + (pick.name || "")]].forEach(function (ln, i) {
+      var y = 330 + i * 92;
+      c.strokeStyle = "#C9B9A6"; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(830, y + 30); c.lineTo(1160, y + 30); c.stroke();
+      if (ln[0]) { c.font = "18px " + FONT; c.fillStyle = "#6B5E55"; c.fillText(ln[0], 830, y - 26); }
+      var fs = 32;
+      while (fs > 18 && zyMeasure(c, ln[1], fs) > 320) fs -= 2;
+      zyDraw(c, ln[1], 834, y, fs, INK);
+    });
+    // 郵戳：寄出以後才蓋
+    if (stamped) {
+      var d = new Date(), ds = d.getFullYear() + "." + (d.getMonth() + 1) + "." + d.getDate();
+      c.save();
+      c.translate(965, 200); c.rotate(-0.18);
+      c.globalAlpha = 0.78; c.strokeStyle = "#B4502F"; c.fillStyle = "#B4502F";
+      c.lineWidth = 5; c.beginPath(); c.arc(0, 0, 70, 0, 7); c.stroke();
+      c.lineWidth = 2.5; c.beginPath(); c.arc(0, 0, 58, 0, 7); c.stroke();
+      c.beginPath(); c.moveTo(-58, -14); c.lineTo(58, -14); c.moveTo(-58, 18); c.lineTo(58, 18); c.stroke();
+      c.textAlign = "center"; c.textBaseline = "middle";
+      c.font = "bold 20px " + FONT; c.fillText(ST[0].name.slice(0, 4), 0, -34);
+      c.font = "bold 22px Arial, sans-serif"; c.fillText(ds, 0, 2);
+      c.font = "bold 18px " + FONT; c.fillText("社區踏查", 0, 36);
+      for (var wv = 0; wv < 4; wv++) {
+        c.beginPath();
+        for (var wx = 80; wx <= 210; wx += 10) c.lineTo(wx, -30 + wv * 18 + Math.sin(wx / 9) * 5);
+        c.stroke();
+      }
+      c.restore();
+    }
+  }
+  // 一個字的注音：在格子右邊的小欄直排，聲調放右上
+  function zyColumn(c, rd, cx, cy, zs) {
+    var light = rd.charAt(0) === "˙", body = light ? rd.slice(1) : rd, tone = "";
+    if ("ˊˇˋ".indexOf(body.charAt(body.length - 1)) >= 0) { tone = body.charAt(body.length - 1); body = body.slice(0, -1); }
+    var n = body.length + (light ? 1 : 0), top = cy - (n - 1) * zs * 0.55;
+    c.font = Math.round(zs) + "px " + FONT; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#1B2836";
+    var k = 0;
+    if (light) { c.fillText("˙", cx, top); k++; }
+    for (var j = 0; j < body.length; j++, k++) c.fillText(body[j], cx, top + k * zs * 1.1);
+    if (tone) c.fillText(tone, cx + zs * 0.62, top + (k - 1) * zs * 1.1 - zs * 0.45);
   }
 
   function finishStation() {
@@ -1593,7 +2187,7 @@
       var bounce = (k === n && !walking) ? Math.abs(Math.sin(time * 3)) * 0.6 : 0;
       sg.sprite.position.y = sg.sprite.userData.baseY + bounce;
       sg.sprite.scale.set(6.6 * sc, 2.27 * sc, 1);
-      if (ST[k].noBuilding) sg.sprite.visible = n === k || !!state.done[ST[k].id] || state.teacher;
+      if (ST[k].noBuilding) sg.sprite.visible = n === k || !!prog()[ST[k].id] || state.teacher;
     });
     ring.scale.setScalar(1 + Math.sin(time * 3) * 0.08);
     centerPick.forEach(function (cs) { var k2 = camMode === "overview" ? 1.6 : 1; cs.scale.set(6 * k2, 2.8 * k2, 1); });
@@ -1617,7 +2211,15 @@
   shadow.visible = false;
   refresh();
   loop();
-  dbOpen(function () { dbAll(function () { ST.forEach(function (_, k) { photoSprite(k); }); }); });
+  if (SHARE) document.body.classList.add("share");
+  else if (!state.phase) showModes();
+  if (SHARE) {
+    // 分享頁只讀公開的 share/photos.json，不讀這台裝置裡的照片
+    fetch("share/photos.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {
+      photos = (d && d.photos) || {};
+      ST.forEach(function (_, k) { photoSprite(k); });
+    }).catch(function () {});
+  } else dbOpen(function () { dbAll(function () { ST.forEach(function (_, k) { photoSprite(k); }); }); });
 
   window.__walk = { state: state, openStation: openStation, chooseStation: chooseStation, zy: zy, jump: function (n) { if (cur) { cur.step = n; renderTask(); } } };
 })();

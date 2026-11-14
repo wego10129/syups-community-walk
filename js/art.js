@@ -189,6 +189,21 @@ window.ART = (function () {
   A.flower = function () { return svg("0 0 40 40", '<path d="M20 22 L20 38" stroke="#16A34A" stroke-width="3"/><circle cx="20" cy="10" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="12" cy="17" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="28" cy="17" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="20" cy="22" r="6" fill="#F472B6" stroke="' + K + '" stroke-width="2.5"/><circle cx="20" cy="16" r="4" fill="#FACC15" stroke="' + K + '" stroke-width="2"/>'); };
   A.cross = function () { return svg("0 0 40 40", '<circle cx="20" cy="20" r="17" fill="#EF4444" stroke="' + K + '" stroke-width="3"/><path d="M13 13 L27 27 M27 13 L13 27" stroke="#fff" stroke-width="5" stroke-linecap="round"/>'); };
 
+  /* 二上數學：錢幣、百十一、容器（數字用 SVG 文字，平板不用另外載字型） */
+  function num(x, y, size, v, color) { return '<text x="' + x + '" y="' + y + '" font-size="' + size + '" font-weight="800" font-family="Arial, sans-serif" text-anchor="middle" fill="' + (color || K) + '">' + v + "</text>"; }
+  A.money = function (v) {
+    if (v === 100) return svg("0 0 64 40", '<rect x="3" y="5" width="58" height="30" rx="3" fill="#F87171" stroke="' + K + '" stroke-width="3"/><circle cx="18" cy="20" r="8" fill="#FECACA" stroke="' + K + '" stroke-width="2"/>' + num(43, 27, 17, 100));
+    var c = { 1: ["#D9A066", 12], 5: ["#E5E7EB", 14], 10: ["#E5E7EB", 15.5], 50: ["#FACC15", 17] }[v] || ["#FACC15", 16];
+    return svg("0 0 40 40", '<circle cx="20" cy="20" r="' + c[1] + '" fill="' + c[0] + '" stroke="' + K + '" stroke-width="3"/>' + num(20, 20 + c[1] * 0.38, c[1] * (v < 10 ? 1.15 : 0.95), v));
+  };
+  A.box100 = function () { return svg("0 0 48 44", '<path d="M4 14 L24 6 L44 14 L44 38 L24 42 L4 38 Z" fill="#F4C27A" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/><path d="M4 14 L24 20 L44 14 M24 20 L24 42" fill="none" stroke="' + K + '" stroke-width="2.5"/>' + num(14, 34, 10, 100) + num(34, 34, 10, 100)); };
+  A.bag10 = function () { return svg("0 0 40 44", '<path d="M10 14 Q8 40 12 41 L28 41 Q32 40 30 14 Z" fill="#FDE68A" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/><path d="M12 14 Q20 6 28 14" fill="none" stroke="#E8704A" stroke-width="4"/>' + num(20, 33, 13, 10)); };
+  A.cup = function () { return svg("0 0 40 40", '<path d="M9 8 L31 8 L28 36 L12 36 Z" fill="#E0F2FE" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/><path d="M11 16 L29 16 L27 34 L13 34 Z" fill="#7DD3FC"/>'); };
+  A.bucket = function () { return svg("0 0 60 60", '<path d="M14 18 Q30 0 46 18" fill="none" stroke="' + K + '" stroke-width="3"/><path d="M8 18 L52 18 L46 54 L14 54 Z" fill="#DC2626" stroke="' + K + '" stroke-width="3.5" stroke-linejoin="round"/><path d="M10 26 L50 26" stroke="#7DD3FC" stroke-width="4"/>'); };
+  A.bottle = function () { return svg("0 0 60 60", '<rect x="24" y="4" width="12" height="8" rx="2" fill="#3F9B5F" stroke="' + K + '" stroke-width="3"/><path d="M20 12 L40 12 L42 20 L42 54 Q42 57 39 57 L21 57 Q18 57 18 54 L18 20 Z" fill="#E0F2FE" stroke="' + K + '" stroke-width="3.5" stroke-linejoin="round"/><path d="M19 30 L41 30 L41 55 L19 55 Z" fill="#7DD3FC"/>'); };
+  A.pot = function () { return svg("0 0 60 60", '<path d="M6 22 L54 22 L50 52 Q50 56 46 56 L14 56 Q10 56 10 52 Z" fill="#9CA3AF" stroke="' + K + '" stroke-width="3.5" stroke-linejoin="round"/><path d="M2 22 L58 22" stroke="' + K + '" stroke-width="4" stroke-linecap="round"/><path d="M10 30 L50 30" stroke="#7DD3FC" stroke-width="4"/>'); };
+  A.pencil = function () { return svg("0 0 100 20", '<path d="M2 10 L14 3 L14 17 Z" fill="#FDE68A" stroke="' + K + '" stroke-width="2.5" stroke-linejoin="round"/><rect x="14" y="3" width="84" height="14" fill="#F6C445" stroke="' + K + '" stroke-width="2.5"/>'); };
+
   /* 小圖示 */
   A.star = function (on) { return svg("0 0 40 40", '<path d="M20 3 L25 15 L38 15 L28 23 L32 36 L20 28 L8 36 L12 23 L2 15 L15 15 Z" fill="' + (on === false ? "#E5E7EB" : "#FACC15") + '" stroke="' + K + '" stroke-width="3" stroke-linejoin="round"/>'); };
   A.check = function () { return svg("0 0 40 40", '<circle cx="20" cy="20" r="17" fill="#22C55E" stroke="' + K + '" stroke-width="3"/><path d="M11 20 L18 27 L30 13" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>'); };
