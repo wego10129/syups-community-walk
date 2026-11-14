@@ -19,5 +19,7 @@
 | `index.html` | 頁面與樣式 |
 | `js/zhuyin.js` | 注音字典（由 `tools/build-zhuyin.js` 產生；多音字改 `tools/zhuyin-overrides.js`） |
 | `vendor/three.min.js` | Three.js r149（放在本機，不靠外部 CDN） |
+| `prompt/社區踏查島提示詞.md` | 給其他學校的提示詞：貼給 Claude，用 Artifact 做出自己學區的踏查地圖 |
+| `prompt/tour.template.js` | 資料範本：換成自己的路線與題目；也可以直接存成 `data/tour.js` 沿用本專案 |
 
 數學題的數字都是假設情境，不是真實資料。

@@ -299,11 +299,14 @@
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
-  var PARK = { x: 10.5, z: 2, w: 7.5, d: 26 };
-  var parkLawn = new THREE.Mesh(new THREE.PlaneGeometry(PARK.w, PARK.d), mat(LOOK.lawn));
-  parkLawn.rotation.x = -Math.PI / 2;
-  parkLawn.position.set(PARK.x, 0.02, PARK.z);
-  scene.add(parkLawn);
+  // 公園草地的範圍寫在 data/tour.js 的 park；沒有公園就不畫
+  var PARK = TOUR.park || null;
+  if (PARK) {
+    var parkLawn = new THREE.Mesh(new THREE.PlaneGeometry(PARK.w, PARK.d), mat(LOOK.lawn));
+    parkLawn.rotation.x = -Math.PI / 2;
+    parkLawn.position.set(PARK.x, 0.02, PARK.z);
+    scene.add(parkLawn);
+  }
 
   /* ---------- 路線 ---------- */
   var pts = TOUR.route.map(function (p) { return new THREE.Vector3(p[0], 0, p[1]); });
@@ -401,7 +404,7 @@
     }
     // 校名與大門
     c.fillStyle = "#f6f1e8"; c.font = "bold 64px " + FONT; c.textAlign = "center"; c.textBaseline = "middle";
-    c.fillText("三 玉 國 小", 512, 120);
+    c.fillText(ST[0].name.split("").join(" "), 512, 120);
     c.fillStyle = "#c9c4bb"; c.fillRect(420, 380, 184, 132);
     c.fillStyle = "#4a3b33"; c.fillRect(440, 400, 144, 112);
     var t = new THREE.CanvasTexture(cv);
@@ -702,7 +705,7 @@
 
   /* ---------- 公園的樹、外圍的房子（刻意放少、顏色放淡） ---------- */
   var parkIdx = ST.findIndex(function (s) { return s.kind === "park"; });
-  for (i = 0; i < 24; i++) {
+  for (i = 0; PARK && parkIdx >= 0 && i < 24; i++) {
     var tx = PARK.x - PARK.w / 2 + 0.8 + rnd() * (PARK.w - 1.6);
     var tz = PARK.z - PARK.d / 2 + 0.8 + rnd() * (PARK.d - 1.6);
     if (Math.hypot(tx - ST[parkIdx].pos[0], tz - ST[parkIdx].pos[1]) < 5.5) continue;
@@ -721,7 +724,7 @@
       if (rnd() < 0.4) continue;
       if (distToRoute(x, z) < 5.5 || nearStation(x, z, 7.5) || insideLoop(x, z) || distToRiver(x, z) < 3) continue;
       if (x > 14.5 && x < 33.5 && z > -14 && z < 25) continue; // 學校校地
-      if (Math.abs(x - PARK.x) < PARK.w / 2 + 2 && Math.abs(z - PARK.z) < PARK.d / 2 + 2) continue;
+      if (PARK && Math.abs(x - PARK.x) < PARK.w / 2 + 2 && Math.abs(z - PARK.z) < PARK.d / 2 + 2) continue;
       if (rnd() < 0.35) { tree(x, z, 0.9); continue; }
       var hg = new THREE.Group();
       var hh = 1.4 + rnd() * 1.6, w = 2.6 + rnd() * 1.2, d = 2.6 + rnd();
