@@ -18,7 +18,17 @@
  *            題目會刻意用兩種說法（先說份數／先說一份幾個），選項含前後對調的算式
  *   小遊戲的角色與圖案（host、before、after、art、item）都畫在 js/art.js
  *   pick2  ：從選項中選出兩個（地名挑戰：三角埔＋玉潮坑溪＝三玉）
- *   letter ：最後的寫信任務
+ *   letter ：最後寫明信片（稿紙格一格一字；寄出後可存成圖片交給老師）
+ *
+ * 二上數學題型（lesson 寫課本單元，會顯示在題目上方給老師看）：
+ *   place   ：幾個百、幾個十、幾個一（h、t、o；box／bag 是「一箱」「一袋」的量詞）
+ *   pay     ：付錢小遊戲，點錢幣放到盤子上，剛好就過關（rounds[].price）
+ *   word    ：二位數加減應用題，先列式再算，附驗算（a、op "+"／"-"、b）
+ *   compare ：數的大小比較，選＞、＜、＝（pairs[].a／b）
+ *   measure ：用尺量長度（rounds[].start 從幾公分開始、len 多長）
+ *   capacity：容量比較，用幾杯水倒滿（items[].cups）
+ *
+ * rules：出發前（老師大屏）第一站顯示的行前規則。
  *
  * 數學題的數字都是「假設」的情境，不是真實資料。
  * 注音由 js/zhuyin.js 自動加上；多音字在該檔的 WORDS 表校正。
@@ -26,6 +36,17 @@
 window.TOUR = {
   title: "三玉社區踏查",
   subtitle: "二年級・生活 × 數學 × 國語",
+
+  // 出發前（老師大屏）：行前規則，顯示在第一站
+  rules: [
+    "跟緊隊伍，走在人行道上。",
+    "過馬路看紅綠燈，聽老師的口令。",
+    "不離開隊伍，有事先舉手告訴老師。",
+    "在店裡和廟裡輕聲細語，不亂摸東西。",
+    "拍照以前，先問：「可以拍照嗎？」",
+    "垃圾帶回家，不亂丟。",
+    "戴好帽子，記得喝水。"
+  ],
 
   // 地圖中間的老地名
   center: { name: "三角埔", note: "以前的地名", tip: "這裡以前叫做「三角埔」！到玉潮坑溪那一站，找出三玉的祕密吧！" },
@@ -115,12 +136,16 @@ window.TOUR = {
           why: "廟裡有人在拜拜，要輕聲細語、尊重別人。"
         },
         {
-          type: "math",
+          type: "place",
           subject: "數學",
-          story: "假設廟裡的供桌上擺了四盤橘子，每一盤放五顆。",
+          lesson: "二上 1-2 幾個百、幾個十、幾個一",
+          story: "假設廟裡準備了一箱一百顆、三袋十顆，還有五顆橘子。",
           item: "orange",
-          per: 5,
-          groups: 4,
+          box: "箱",
+          bag: "袋",
+          h: 1,
+          t: 3,
+          o: 5,
           unit: "顆",
           ask: "一共有幾顆橘子？"
         }
@@ -144,18 +169,20 @@ window.TOUR = {
           why: "銀行可以幫我們把錢存起來，需要的時候再領出來。"
         },
         {
-          type: "run",
+          type: "pay",
           subject: "數學",
-          title: "幫行員數硬幣",
-          story: "銀行裡有好多五元硬幣！先看圖，選出正確的乘法算式，就能把硬幣存進小豬撲滿。",
+          lesson: "二上 1-3 付錢",
+          title: "幫小豬撲滿存錢",
+          story: "行員叔叔請你幫忙把錢存進小豬撲滿！點下面的錢放到盤子上，放剛剛好的錢，再按「付錢」。",
           host: "banker",
           before: "pig",
           after: "pigFull",
+          coins: [1, 5, 10, 50, 100],
           rounds: [
-            { q: "一個硬幣是五元，有三個硬幣，一共幾元？", item: "coin", per: 5, groups: 3, unit: "元" },
-            { q: "有六個五元硬幣，一共幾元？", item: "coin", per: 5, groups: 6, unit: "元" },
-            { q: "小美存了四個五元硬幣，一共幾元？", item: "coin", per: 5, groups: 4, unit: "元" },
-            { q: "每個硬幣五元，存了七個，一共幾元？", item: "coin", per: 5, groups: 7, unit: "元" }
+            { q: "要存 16 元。", price: 16 },
+            { q: "要存 75 元。", price: 75 },
+            { q: "要存 120 元。", price: 120 },
+            { q: "要存 158 元。", price: 158 }
           ]
         }
       ]
@@ -212,12 +239,13 @@ window.TOUR = {
           ]
         },
         {
-          type: "math",
+          type: "word",
           subject: "數學",
-          story: "小明要買三張郵票，假設一張郵票要六元。",
-          item: "coin",
-          per: 6,
-          groups: 3,
+          lesson: "二上 2-1 二位數的加法",
+          story: "假設寄一封信要貼 28 元的郵票，寄一個小包裹要貼 45 元的郵票。",
+          a: 28,
+          op: "+",
+          b: 45,
           unit: "元",
           ask: "一共要付幾元？"
         }
@@ -278,19 +306,26 @@ window.TOUR = {
           why: "火災和緊急救護都打一一九，消防員會趕來幫忙。"
         },
         {
-          type: "run",
+          type: "capacity",
           subject: "數學",
-          title: "幫消防員滅火",
-          story: "社區裡有四團火！看圖選出正確的乘法算式，消防員就能澆熄一團火。",
-          host: "firefighter",
-          before: "fire",
-          after: "smoke",
-          rounds: [
-            { q: "有三桶水，每桶裝六瓢水，一共幾瓢？", item: "drop", per: 6, groups: 3, unit: "瓢" },
-            { q: "每輛消防車坐四位消防員，來了五輛，一共幾位？", item: "helmet", per: 4, groups: 5, unit: "位" },
-            { q: "有七條水管，每條接三個噴頭，一共幾個噴頭？", item: "drop", per: 3, groups: 7, unit: "個" },
-            { q: "有兩輛消防車，每輛載八捲水管，一共幾捲？", item: "drop", per: 8, groups: 2, unit: "捲" }
-          ]
+          lesson: "二上 5-2 容量的比較",
+          story: "消防員用同樣大小的杯子，把水倒進水桶和水壺。看看各要倒幾杯才會滿？",
+          items: [
+            { name: "水桶", art: "bucket", cups: 9 },
+            { name: "水壺", art: "bottle", cups: 4 }
+          ],
+          unit: "杯"
+        },
+        {
+          type: "word",
+          subject: "數學",
+          lesson: "二上 4-2 解題和驗算",
+          story: "假設消防車的水箱裝了 63 桶水，滅火用掉了 27 桶。",
+          a: 63,
+          op: "-",
+          b: 27,
+          unit: "桶",
+          ask: "還剩下幾桶水？"
         }
       ]
     },
@@ -331,14 +366,15 @@ window.TOUR = {
           ]
         },
         {
-          type: "math",
+          type: "measure",
           subject: "數學",
-          story: "全組有七個小朋友，每個人借三本書。",
-          item: "book",
-          per: 3,
-          groups: 7,
-          unit: "本",
-          ask: "全組一共借了幾本書？"
+          lesson: "二上 3-3 量一量，畫一畫",
+          q: "在圖書館寫學習單要用的文具，用尺量一量有多長？",
+          rounds: [
+            { name: "鉛筆", item: "pencil", start: 0, len: 9 },
+            { name: "蠟筆", item: "crayon", start: 2, len: 6 },
+            { name: "書籤", item: "bookmark", start: 0, len: 13 }
+          ]
         }
       ]
     },
@@ -370,6 +406,7 @@ window.TOUR = {
         {
           type: "run",
           subject: "數學",
+          lesson: "乘法（少量保留）",
           title: "幫公園種樹",
           story: "公園想多種一些樹！看圖選出正確的乘法算式，就能種下一棵大樹。",
           host: "kid",
@@ -412,6 +449,17 @@ window.TOUR = {
           parts: ["三", "玉"],
           result: "三玉國小",
           end: "三角埔的「三」，加上玉潮坑溪的「玉」，就是我們的三玉國小！"
+        },
+        {
+          type: "compare",
+          subject: "數學",
+          lesson: "二上 1-4 數的大小比較",
+          q: "小朋友在溪邊數東西（數字是假設的）。比比看，哪一邊比較多？",
+          pairs: [
+            { la: "上游的小魚", a: 128, lb: "下游的小魚", b: 182 },
+            { la: "大石頭", a: 150, lb: "小石頭", b: 105 },
+            { la: "紅色落葉", a: 99, lb: "黃色落葉", b: 99 }
+          ]
         }
       ]
     },

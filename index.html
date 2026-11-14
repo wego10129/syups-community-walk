@@ -306,6 +306,84 @@
     #sheet { height: min(980px, 94vh); }
     .host { width: 7rem; height: 7.7rem; }
   }
+  /* 二上數學題型 */
+  .unitchip { display: inline-block; font-size: .75rem; margin-left: .4rem; padding: .05rem .55rem; border-radius: 1rem; background: #eef2f7; border: 1.5px solid #c9d3df; color: #4a5a6c; vertical-align: top; }
+  .unitchip { align-self: flex-start; }
+  .t-compare .opt { font-size: 1.5rem; text-align: center; }
+  .placePics { display: flex; flex-wrap: wrap; gap: .6rem; margin: .3rem 0 .6rem; }
+  .pgroup { background: #fff; border: 2px dashed #d8c9b5; border-radius: .9rem; padding: .35rem .5rem; }
+  .prow3 { display: flex; flex-wrap: wrap; gap: .15rem; max-width: 15rem; }
+  .pit { width: 2rem; height: 2rem; display: inline-block; }
+  .pgroup .pit { width: 2.4rem; height: 2.3rem; }
+  .plabel { font-size: .9rem; opacity: .8; text-align: center; line-height: 2; }
+  .cmp { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: .3rem 0 .6rem; }
+  .cside { background: #fff; border: 3px solid #eadfce; border-radius: 1rem; padding: .3rem 1rem; text-align: center; line-height: 2; min-width: 7rem; }
+  .cside b { display: block; font-size: 2.2rem; line-height: 1.2; font-family: Arial, sans-serif; }
+  .csym { font-size: 2.6rem; font-weight: bold; width: 3.4rem; text-align: center; color: #b9aa9a; }
+  .csym.on { color: var(--accent); animation: pop .4s; }
+  .rulerBox { background: #fff; border-radius: 1rem; padding: .4rem; margin: .3rem 0 .5rem; }
+  .ruler { width: 100%; height: auto; max-height: 9rem; }
+  .caps { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin: .3rem 0 .6rem; }
+  .cap { background: #fff; border: 2px solid #eadfce; border-radius: 1rem; padding: .4rem; text-align: center; }
+  .cimg { width: 4.2rem; height: 4.2rem; margin: 0 auto; }
+  .cname { font-weight: bold; line-height: 2; }
+  .cups { display: flex; flex-wrap: wrap; justify-content: center; gap: .1rem; }
+  .tray { min-height: 4.2rem; background: #f3ead9; border: 3px dashed #c9b9a6; border-radius: 1rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .25rem; padding: .3rem; margin: .4rem 0; }
+  .trayHint { opacity: .6; line-height: 2; }
+  .tc { width: 2.6rem; height: 2.6rem; display: inline-block; animation: pop .3s; }
+  .tc.bill, .coinBtn.bill { width: 4rem; }
+  .coins { display: flex; justify-content: center; gap: .6rem; flex-wrap: wrap; margin: .3rem 0; }
+  .coinBtn { width: 4rem; height: 4rem; background: #fff; border: 3px solid #eadfce; border-radius: 1rem; padding: .3rem; }
+  .coinBtn.bill { width: 5.6rem; }
+  .coinBtn:active { transform: scale(.92); }
+  .payCtl { display: flex; justify-content: center; gap: .6rem; margin: .3rem 0; }
+  .why.check { background: #eef6ff; }
+
+  /* 明信片 */
+  .signRow { display: flex; flex-wrap: wrap; gap: 1rem; margin: .2rem 0 .5rem; font-size: 1.15rem; line-height: 2.2; }
+  .signRow input { font: inherit; font-size: 1.2rem; width: 6em; padding: .1rem .5rem; border: 3px solid var(--line); border-radius: .7rem; background: #fff; }
+  .signRow input[type=number] { width: 4em; }
+  canvas.postcard { width: min(100%, 46rem, calc((min(760px, 96vh) - 19rem) * 1.5)); aspect-ratio: 3 / 2; height: auto; display: block; margin: .2rem auto; border-radius: 1rem; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+  .opt:disabled, .next:disabled { opacity: .45; }
+  .mailStage { position: relative; height: 22rem; overflow: hidden; }
+  .mailStage .mbox { position: absolute; left: 50%; bottom: .5rem; width: 9rem; height: 10rem; transform: translateX(-50%); }
+  .mailStage .flyCard { position: absolute; left: 50%; top: .5rem; width: 22rem; transform: translateX(-50%); border-radius: .6rem; box-shadow: 0 6px 18px rgba(0,0,0,.2);
+    transition: transform 1.6s cubic-bezier(.5,-0.2,.6,1), opacity .4s 1.4s; }
+  .mailStage.go .flyCard { transform: translate(-50%, 13.5rem) scale(.12) rotate(-12deg); opacity: 0; }
+  .mailStage.go .mbox { animation: pop .4s 1.5s; }
+  .mailMsg { text-align: center; font-size: 1.2rem; }
+  @media (prefers-reduced-motion: reduce) { .mailStage .flyCard { transition: none; } }
+
+  /* 家長分享頁 */
+  .shareBox { margin-top: .9rem; padding: .6rem .8rem; border: 2px dashed #c9b9a6; border-radius: 1rem; background: #fff; }
+  .shareBox h4 { margin: 0 0 .2rem; }
+  .shareBox label { display: block; margin: .3rem 0 .5rem; }
+  #photoMsg code { word-break: break-all; background: #f1e8da; padding: .1rem .3rem; border-radius: .3rem; }
+  body.share #stamps { display: none; }
+  body.share .photo { height: min(16rem, 38vh); }
+  body.share #modeBtn, body.share #photoBtn, body.share #teacherBtn, body.share #resetBtn, body.share #jumpList, body.share #menu hr { display: none; }
+
+  /* 開場：選擇使用方式 */
+  #modeScreen { position: fixed; inset: 0; background: rgba(40,30,20,.45); display: none; place-items: center; z-index: 40; padding: 1rem; }
+  #modeScreen.show { display: grid; }
+  #modeBox { background: var(--paper); border: 3px solid var(--line); border-radius: 1.4rem; width: min(40rem, 96vw); max-height: 94vh; overflow-y: auto; padding: 1.2rem 1.3rem; }
+  #modeBox h2 { margin: 0 0 .2rem; font-size: 1.6rem; }
+  .modeOpt { display: flex; align-items: center; gap: .9rem; width: 100%; text-align: left; background: #fff; border: 3px solid #eadfce; border-radius: 1.1rem; padding: .7rem .9rem; margin-top: .7rem; min-height: 5rem; }
+  .modeOpt:hover, .modeOpt.on { border-color: var(--accent); background: #fff0e6; }
+  .modeOpt .mi { width: 3.6rem; height: 3.6rem; flex: none; }
+  .modeOpt .mt { display: flex; flex-direction: column; gap: .1rem; }
+  .modeOpt b { font-size: 1.25rem; }
+  .modeOpt em { font-style: normal; font-size: .85rem; color: #fff; background: var(--line); border-radius: .5rem; padding: 0 .45rem; align-self: flex-start; }
+  .modeOpt small { font-size: .95rem; opacity: .8; }
+  /* 出發前：預覽卡 */
+  .rules { margin: .2rem 0 .8rem; padding-left: 1.6em; font-size: 1.15rem; }
+  .rules li { margin: .25rem 0; line-height: 2.1; }
+  .routeList { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: .6rem; }
+  .rstop { display: inline-flex; align-items: center; gap: .3rem; background: #fff; border: 2px solid #eadfce; border-radius: 2rem; padding: .15rem .7rem .15rem .3rem; line-height: 2.1; }
+  .rstop .ri { width: 1.9rem; height: 1.9rem; display: inline-block; }
+  .todo { list-style: none; padding: 0; margin: .2rem 0 .6rem; }
+  .todo li { display: flex; align-items: flex-start; gap: .6rem; background: #fff; border: 2px solid #eadfce; border-radius: 1rem; padding: .4rem .7rem; margin: .45rem 0; font-size: 1.12rem; line-height: 2.1; }
+  .todo .tag { flex: none; margin-top: .35rem; }
   #err { position: fixed; inset: 0; display: none; place-items: center; background: var(--paper); padding: 2rem; text-align: center; z-index: 50; }
 </style>
 </head>
@@ -324,6 +402,7 @@
   <button id="bigBtn">🖥️ 大屏模式（字放大）</button>
   <button id="zyBtn">ㄅ 注音</button>
   <button id="photoBtn">📷 換上照片（老師設定）</button>
+  <button id="modeBtn">🔁 切換使用方式（出發前／踏查後）</button>
   <button id="teacherBtn">🔓 老師模式（每站都能去）</button>
   <div id="jumpList"></div>
   <hr>
@@ -337,6 +416,7 @@
 
 <div id="card"><div id="sheet"></div></div>
 <div id="toast"></div>
+<div id="modeScreen"><div id="modeBox"></div></div>
 <div id="photoPanel"><div id="photoBox">
   <h3>📷 換上照片</h3>
   <p class="note">每個地點可以換上你們班實際拍的照片。照片只存在這台裝置；要放到學生的平板，先「匯出設定檔」，再到學生平板「匯入設定檔」。請避開拍到學生的臉。</p>
@@ -345,6 +425,12 @@
     <button class="pbtn" id="exportBtn">⬇️ 匯出設定檔</button>
     <label class="pbtn">⬆️ 匯入設定檔<input type="file" id="importInput" accept="application/json,.json"></label>
     <button class="pbtn gray" id="photoClose">關閉</button>
+  </div>
+  <div class="shareBox">
+    <h4>👪 給家長的分享頁</h4>
+    <p class="note">分享頁是公開網頁，拿到連結的人都看得到，所以只放「地點」照片。照片匯入時已重新壓縮，手機拍照時記錄的位置（GPS）資料不會跟著存下來。</p>
+    <label class="note"><input type="checkbox" id="shareOk"> 我確認這些照片裡沒有學生的臉、名牌和班級</label>
+    <button class="pbtn" id="shareBtn">⬇️ 匯出家長分享檔（photos.json）</button>
   </div>
   <p class="note" id="photoMsg"></p>
 </div></div>
