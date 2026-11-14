@@ -14,7 +14,7 @@
 | 檔案 | 內容 |
 | --- | --- |
 | `data/tour.js` | **路線、站點、題目**（要改題目只改這裡） |
-| `js/game.js` | 3D 畫面與互動 |
+| `js/game.js` | 3D 畫面與互動（最上面的 `LOOK` 是畫面風格數值：亮度、燈光、霧面程度、地面／道路色票） |
 | `js/art.js` | 小遊戲的角色與圖示（SVG，風格照 class-games） |
 | `index.html` | 頁面與樣式 |
 | `js/zhuyin.js` | 注音字典（由 `tools/build-zhuyin.js` 產生；多音字改 `tools/zhuyin-overrides.js`） |

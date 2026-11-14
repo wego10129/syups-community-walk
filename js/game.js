@@ -7,6 +7,12 @@
   var TOUR = window.TOUR;
   var ST = TOUR.stations;
   var KEY = "community-walk-v2";
+  // 畫面風格數值（黏土玩具感）：亮度、三盞燈強度、材質霧面程度
+  var LOOK = {
+    exposure: 0.65, hemi: 0.55, sun: 0.95, fill: 0.22, rough: 0.78, fogNear: 110, fogFar: 230,
+    // 色票：大面積的地面、草地、道路、溪水（色調映射會讓顏色變淡，所以這裡比較飽和）
+    ground: 0x96d46e, lawn: 0x7cc75a, road: 0xf6cf8a, water: 0x4db6ea
+  };
 
   /* ---------- 進度（只存在這台裝置的瀏覽器裡） ---------- */
   var state = { done: {}, at: 0, big: false, teacher: false, zhuyin: true };
@@ -189,6 +195,8 @@
   /* ---------- 3D 場景 ---------- */
   var canvas = $("scene");
   var renderer;
+  // 黏土感：顏色用 sRGB 色彩管理，再經 ACES 色調映射，亮部不會過曝
+  THREE.ColorManagement.legacyMode = false;
   try {
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
   } catch (e) {
@@ -196,14 +204,21 @@
     return;
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = LOOK.exposure;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   var scene = new THREE.Scene();
   scene.background = new THREE.Color(0xd6ecfb);
-  scene.fog = new THREE.Fog(0xd6ecfb, 80, 170);
+  scene.fog = new THREE.Fog(0xd6ecfb, LOOK.fogNear, LOOK.fogFar);
   var camera = new THREE.PerspectiveCamera(45, 1, 0.5, 400);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x9c8f78, 0.5));
-  var sun = new THREE.DirectionalLight(0xfff1dc, 0.62);
+  // 三盞燈：半球光（天空／地面反光）＋暖色主光（投影）＋冷色補光（讓背光面不死黑）
+  scene.add(new THREE.HemisphereLight(0xeaf4ff, 0xb2c08f, LOOK.hemi));
+  var fill = new THREE.DirectionalLight(0xbcd4ff, LOOK.fill);
+  fill.position.set(40, 30, -35);
+  scene.add(fill);
+  var sun = new THREE.DirectionalLight(0xfff0d8, LOOK.sun);
   sun.position.set(-30, 60, 20);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -214,9 +229,14 @@
   sun.shadow.radius = 4;
   scene.add(sun);
 
+  // 站牌、照片等平面標籤：保持原本顏色，不經色調映射
+  function uiSprite(tex) {
+    tex.encoding = THREE.sRGBEncoding;
+    return new THREE.SpriteMaterial({ map: tex, depthTest: false, toneMapped: false });
+  }
   var matCache = {};
   function mat(color) {
-    if (!matCache[color]) matCache[color] = new THREE.MeshLambertMaterial({ color: color });
+    if (!matCache[color]) matCache[color] = new THREE.MeshStandardMaterial({ color: color, roughness: LOOK.rough, metalness: 0 });
     return matCache[color];
   }
   // 圓角方塊：讓建築看起來圓潤（太薄的板子維持一般方塊）
@@ -275,12 +295,12 @@
     return m;
   }
 
-  var ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(0xb5dc96));
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), mat(LOOK.ground));
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
   var PARK = { x: 10.5, z: 2, w: 7.5, d: 26 };
-  var parkLawn = new THREE.Mesh(new THREE.PlaneGeometry(PARK.w, PARK.d), mat(0xa5d686));
+  var parkLawn = new THREE.Mesh(new THREE.PlaneGeometry(PARK.w, PARK.d), mat(LOOK.lawn));
   parkLawn.rotation.x = -Math.PI / 2;
   parkLawn.position.set(PARK.x, 0.02, PARK.z);
   scene.add(parkLawn);
@@ -320,7 +340,7 @@
     return inside;
   }
 
-  var roadMat = mat(0xf3d7a0);
+  var roadMat = mat(LOOK.road);
   for (i = 1; i < pts.length; i++) {
     var a = pts[i - 1], b = pts[i];
     var seg = new THREE.Mesh(new THREE.BoxGeometry(a.distanceTo(b), 0.08, 2.6), roadMat);
@@ -345,7 +365,7 @@
   var pickables = [];
   var leafCache = {};
   function leafMat(color) {
-    if (!leafCache[color]) leafCache[color] = new THREE.MeshStandardMaterial({ color: color, flatShading: true, roughness: 0.9 });
+    if (!leafCache[color]) leafCache[color] = new THREE.MeshStandardMaterial({ color: color, flatShading: true, roughness: LOOK.rough, metalness: 0 });
     return leafCache[color];
   }
   function tree(x, z, sc, parent) {
@@ -385,6 +405,7 @@
     c.fillStyle = "#c9c4bb"; c.fillRect(420, 380, 184, 132);
     c.fillStyle = "#4a3b33"; c.fillRect(440, 400, 144, 112);
     var t = new THREE.CanvasTexture(cv);
+    t.encoding = THREE.sRGBEncoding;
     return t;
   }
 
@@ -394,7 +415,7 @@
       // 前棟（紅磚色、四層樓，正面用畫的窗戶與校名）
       var face = facadeTexture();
       var side = mat(0x7a2e2e);
-      var front = new THREE.Mesh(new THREE.BoxGeometry(11, 5.4, 3), [side, side, mat(0xe9e4dc), side, new THREE.MeshLambertMaterial({ map: face }), side]);
+      var front = new THREE.Mesh(new THREE.BoxGeometry(11, 5.4, 3), [side, side, mat(0xe9e4dc), side, new THREE.MeshStandardMaterial({ map: face, roughness: LOOK.rough, metalness: 0 }), side]);
       front.position.set(0, 2.7, 7.5);
       g.add(front);
       box(11.4, 0.3, 3.4, 0xe9e4dc, 0, 5.4, 7.5, g);
@@ -556,7 +577,7 @@
     var cv = document.createElement("canvas");
     cv.width = 640; cv.height = 220;
     var tex = new THREE.CanvasTexture(cv);
-    var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+    var sp = new THREE.Sprite(uiSprite(tex));
     sp.renderOrder = 10;
     var high = stn.noBuilding ? 4.6 : stn.kind === "river" ? 4.6 : 9;
     sp.position.set(stn.pos[0], high, stn.pos[1]);
@@ -587,7 +608,7 @@
       var s = Math.max(W / img.width, H / img.height);
       c.drawImage(img, 20 + (W - img.width * s) / 2, 20 + (H - img.height * s) / 2, img.width * s, img.height * s);
       c.restore();
-      var sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false }));
+      var sp = new THREE.Sprite(uiSprite(new THREE.CanvasTexture(cv)));
       var h = 4.2, w = h * cv.width / cv.height;
       sp.scale.set(w, h, 1);
       sp.position.set(ST[k].pos[0], 7.4, ST[k].pos[1]);
@@ -601,14 +622,14 @@
     img.src = url;
   }
 
-  var ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.2, 32), new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.8, side: THREE.DoubleSide }));
+  var ring = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.2, 32), new THREE.MeshBasicMaterial({ color: 0xffb02e, transparent: true, opacity: 0.8, side: THREE.DoubleSide, toneMapped: false }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.12;
   scene.add(ring);
 
   /* ---------- 玉潮坑溪 ---------- */
   var rpts = (TOUR.river || []).map(function (p) { return new THREE.Vector3(p[0], 0, p[1]); });
-  var waterMat = new THREE.MeshLambertMaterial({ color: 0x67bfe3 });
+  var waterMat = new THREE.MeshStandardMaterial({ color: LOOK.water, roughness: 0.5, metalness: 0 });
   for (i = 1; i < rpts.length; i++) {
     var ra = rpts[i - 1], rb = rpts[i];
     var rs = new THREE.Mesh(new THREE.BoxGeometry(ra.distanceTo(rb) + 0.6, 0.06, 1.7), waterMat);
@@ -657,7 +678,7 @@
     var ccv = document.createElement("canvas");
     ccv.width = 640; ccv.height = 300;
     var ctex = new THREE.CanvasTexture(ccv);
-    var csp = new THREE.Sprite(new THREE.SpriteMaterial({ map: ctex, depthTest: false }));
+    var csp = new THREE.Sprite(uiSprite(ctex));
     csp.renderOrder = 8;
     csp.position.set(CENTER.x, 6.2, CENTER.z);
     scene.add(csp);
