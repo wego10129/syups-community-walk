@@ -363,18 +363,51 @@
   body.share .photo { height: min(16rem, 38vh); }
   body.share #modeBtn, body.share #photoBtn, body.share #teacherBtn, body.share #resetBtn, body.share #jumpList, body.share #menu hr { display: none; }
 
-  /* 開場：選擇使用方式 */
-  #modeScreen { position: fixed; inset: 0; background: rgba(40,30,20,.45); display: none; place-items: center; z-index: 40; padding: 1rem; }
+  /* 使用方式視窗：照 info-class 選單樣式（格線底、粗黑框、彩色標題列） */
+  #modeScreen { position: fixed; inset: 0; background: rgba(27,40,54,.45); display: none; place-items: center; z-index: 40; padding: 12px; }
   #modeScreen.show { display: grid; }
-  #modeBox { background: var(--paper); border: 3px solid var(--line); border-radius: 1.4rem; width: min(40rem, 96vw); max-height: 94vh; overflow-y: auto; padding: 1.2rem 1.3rem; }
-  #modeBox h2 { margin: 0 0 .2rem; font-size: 1.6rem; }
-  .modeOpt { display: flex; align-items: center; gap: .9rem; width: 100%; text-align: left; background: #fff; border: 3px solid #eadfce; border-radius: 1.1rem; padding: .7rem .9rem; margin-top: .7rem; min-height: 5rem; }
-  .modeOpt:hover, .modeOpt.on { border-color: var(--accent); background: #fff0e6; }
-  .modeOpt .mi { width: 3.6rem; height: 3.6rem; flex: none; }
-  .modeOpt .mt { display: flex; flex-direction: column; gap: .1rem; }
-  .modeOpt b { font-size: 1.25rem; }
-  .modeOpt em { font-style: normal; font-size: .85rem; color: #fff; background: var(--line); border-radius: .5rem; padding: 0 .45rem; align-self: flex-start; }
-  .modeOpt small { font-size: .95rem; opacity: .8; }
+  #modeBox { width: min(1100px, 100%); max-height: 96vh; overflow-y: auto; border: 3px solid #1B2836; border-radius: 18px; box-shadow: 6px 6px 0 #1B2836; padding: 16px 18px 20px;
+    background: #E3EDF2 linear-gradient(#D0DEE6 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(90deg, #D0DEE6 1px, transparent 1px) 0 0 / 28px 28px; color: #1B2836; }
+  .mwTop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  .mwTop h2 { margin: 0; font-size: 26px; }
+  .tagk { display: inline-block; background: #FFE066; border: 3px solid #1B2836; border-radius: 10px; padding: 0 8px; box-shadow: 3px 3px 0 #1B2836; font-weight: 900; transform: rotate(-4deg); }
+  .badge { display: inline-block; font-size: 13px; font-weight: 700; border: 2px solid #1B2836; border-radius: 999px; padding: 0 10px; background: #F3F7FA; }
+  .btn { font-weight: 700; font-size: 16px; padding: 8px 16px; border: 3px solid #1B2836; border-radius: 12px; background: #fff; box-shadow: 3px 3px 0 #1B2836; }
+  .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #1B2836; }
+  .btn.sm { font-size: 14px; padding: 4px 12px; }
+  .mwX { margin-left: auto; }
+  .titlebar { border: 2px dashed #F2B400; border-radius: 12px; padding: 6px 12px; background: #FFF9DB; font-size: 15px; font-weight: 900; margin-bottom: 16px; line-height: 1.6; }
+  .entries { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; align-items: start; }
+  .entry { display: flex; flex-direction: column; background: #fff; border: 3px solid #1B2836; border-radius: 18px; box-shadow: 5px 5px 0 #1B2836; overflow: hidden; }
+  .entry-band { height: 52px; border-bottom: 3px solid #1B2836; position: relative; display: flex; align-items: flex-end; gap: 8px; padding: 10px 14px; }
+  .m-pre .entry-band { background: #3A9FEF; } .m-postBig .entry-band { background: #1FA963; } .m-postTab .entry-band { background: #EE4F8B; }
+  .entry-band .num { font-weight: 800; font-size: 15px; background: #fff; border: 2px solid #1B2836; border-radius: 8px; padding: 0 9px; }
+  .entry-band .deco { position: absolute; right: 14px; top: 10px; }
+  .entry-band .deco span { font-weight: 800; font-size: 14px; background: #fff; border: 2px solid #1B2836; border-radius: 7px; padding: 1px 8px; box-shadow: 0 3px 0 #1B2836; }
+  .nowtag { font-weight: 900; font-size: 13px; background: #FFE066; border: 2px solid #1B2836; border-radius: 999px; padding: 0 10px; }
+  .entry.cur { outline: 4px solid #FFE066; outline-offset: 2px; }
+  .entry-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .entry-body h2 { margin: 0; font-size: 23px; }
+  .eicon { width: 3.4rem; height: 3.4rem; }
+  .enote { margin: 0; font-size: 15px; color: #4C5D6E; font-weight: 700; line-height: 1.5; }
+  .diff { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 900; font-size: 19px; border: 3px solid #1B2836; border-radius: 12px; background: #FFE066; padding: 8px 12px; box-shadow: 3px 3px 0 #1B2836; color: #1B2836; width: 100%; text-align: left; min-height: 3.4rem; }
+  .diff:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 #1B2836; }
+  .diff small { display: block; font-size: 13px; font-weight: 700; color: #4C5D6E; line-height: 1.35; }
+  .lv-r { display: grid; justify-items: end; flex: none; }
+  .dots { font-size: 12px; letter-spacing: 1px; color: #1FA963; white-space: nowrap; }
+  .dots .off { color: #C9D3DC; }
+  .again { align-self: flex-start; }
+  .again.warn { background: #FF6B4A; color: #fff; }
+  /* 上方：目前的使用方式（點了可以切換） */
+  #modeChip { pointer-events: auto; display: flex; flex-direction: column; align-items: flex-start; border: 3px solid #1B2836; border-radius: 12px; box-shadow: 3px 3px 0 #1B2836; padding: .15rem .7rem; color: #fff; line-height: 1.3; text-align: left; }
+  #modeChip[hidden] { display: none; }
+  #modeChip b { font-size: 1rem; }
+  #modeChip small { font-size: .72rem; opacity: .95; }
+  #modeChip.m-pre { background: #3A9FEF; } #modeChip.m-postBig { background: #1FA963; } #modeChip.m-postTab { background: #EE4F8B; }
+  /* 印章可以點 */
+  .stamp { cursor: pointer; background: transparent; }
+  .stamp:active { transform: scale(.9); }
+  .stamp.here { outline: 3px solid #E8704A; outline-offset: 2px; filter: none; opacity: 1; }
   /* 出發前：預覽卡 */
   .rules { margin: .2rem 0 .8rem; padding-left: 1.6em; font-size: 1.15rem; }
   .rules li { margin: .25rem 0; line-height: 2.1; }
@@ -392,6 +425,7 @@
 
 <div id="top">
   <div id="title"><b id="titleText">社區踏查</b><small id="subText"></small></div>
+  <button id="modeChip" hidden></button>
   <div id="stamps"></div>
   <div id="tools">
     <button class="round" id="menuBtn" aria-label="設定">⚙️</button>

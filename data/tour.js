@@ -310,6 +310,7 @@ window.TOUR = {
           subject: "數學",
           lesson: "二上 5-2 容量的比較",
           story: "消防員用同樣大小的杯子，把水倒進水桶和水壺。看看各要倒幾杯才會滿？",
+          preview: "水桶和水壺，哪一個裝的水比較多？",
           items: [
             { name: "水桶", art: "bucket", cups: 9 },
             { name: "水壺", art: "bottle", cups: 4 }

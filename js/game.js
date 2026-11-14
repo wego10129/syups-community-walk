@@ -17,15 +17,30 @@
   };
 
   /* ---------- 進度（只存在這台裝置的瀏覽器裡） ---------- */
-  // phase：pre＝出發前（老師大屏，只看不答）、post＝踏查後（作答拿印章）；null＝還沒選
-  var state = { done: {}, seen: {}, at: 0, big: false, teacher: false, zhuyin: true, phase: null };
+  // mode：pre＝出發前（老師大屏，只看不答）、postBig＝踏查後全班回顧、postTab＝踏查後學生平板
+  // 三種方式的進度（prog）和人物停在哪一站（atBy）分開記錄，切換不會互相影響
+  var state = { mode: null, phase: null, prog: { pre: {}, postBig: {}, postTab: {}, share: {} }, atBy: {}, at: 0, big: false, teacher: false, zhuyin: true };
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (saved) state = Object.assign(state, saved);
-    if (!state.seen) state.seen = {};
-    if (SHARE) { state.phase = "pre"; state.teacher = true; }
+    if (saved) {
+      // 舊版存檔（seen／done）搬到新格式
+      if (!saved.prog) {
+        var oldMode = saved.phase === "pre" ? "pre" : saved.phase ? (saved.big ? "postBig" : "postTab") : null;
+        saved.prog = { pre: saved.seen || {}, postBig: {}, postTab: {}, share: {} };
+        if (saved.done) saved.prog[oldMode === "postBig" ? "postBig" : "postTab"] = saved.done;
+        saved.mode = oldMode;
+        delete saved.seen; delete saved.done;
+      }
+      state = Object.assign(state, saved);
+      ["pre", "postBig", "postTab", "share"].forEach(function (m) { if (!state.prog[m]) state.prog[m] = {}; });
+      if (!state.atBy) state.atBy = {};
+    }
   } catch (e) {}
+  if (SHARE) { state.mode = "share"; state.teacher = true; }
+  state.phase = state.mode === "postBig" || state.mode === "postTab" ? "post" : state.mode ? "pre" : null;
+  if (!(state.at >= 0 && state.at < window.TOUR.stations.length)) state.at = 0;
   function save() {
+    if (state.mode) state.atBy[state.mode] = state.at;
     try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {}
   }
 
@@ -796,7 +811,7 @@
   /* ---------- 進度判斷 ---------- */
   var walking = false;
   // 目前這個階段的進度：出發前記「看過」，踏查後記「完成」
-  function prog() { return state.phase === "pre" ? state.seen : state.done; }
+  function prog() { return state.prog[state.mode || "postTab"]; }
   function nextIndex() {
     for (var k = 0; k < ST.length; k++) if (!prog()[ST[k].id]) return k;
     return -1;
@@ -887,12 +902,29 @@
     if (k === 0 && nextIndex() === ST.length - 1) k = ST.length - 1;
     chooseStation(k);
   }
-  function chooseStation(k) {
+  // 老師操作的大屏（出發前、全班回顧）每一站都能去；學生平板只能去下一站和完成過的站
+  function canGo(k) { return state.mode === "pre" || state.mode === "postBig" || state.mode === "share" || state.teacher || !!prog()[ST[k].id] || k === nextIndex(); }
+  function chooseStation(k, jump) {
     if (walking) return;
     if (k === state.at) { openStation(k); return; }
-    if (state.teacher || k === nextIndex() || prog()[ST[k].id]) {
-      walkTo(k, function () { if (!prog()[ST[k].id]) openStation(k); });
-    } else toast(ART.kid(), "先完成前面的站，再來這裡喔！");
+    if (!canGo(k)) { toast(ART.kid(), "先完成前面的站，再來這裡喔！"); return; }
+    if (jump || k !== nextIndex()) teleport(k, function () { openStation(k); });
+    else walkTo(k, function () { if (!prog()[ST[k].id]) openStation(k); });
+  }
+  // 回到某一站時，人物彈一下
+  var poofT = 0;
+  function poof() { if (!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) poofT = 0.45; }
+  // 直接回到某一站（不用一路走過去）
+  function teleport(k, cb) {
+    closeMenu();
+    if ($("card").classList.contains("show")) closeCard();
+    state.at = k;
+    walkS = walkTarget = cum[ST[k].at];
+    camMode = "follow";
+    $("viewBtn").classList.remove("on");
+    refresh();
+    poof();
+    setTimeout(cb, 380);
   }
 
   /* ---------- 介面 ---------- */
@@ -901,45 +933,89 @@
     postBig: { name: "踏查後・全班回顧", who: "老師大屏", note: "回到教室，全班一起作答、拿印章。", icon: "kidCheer" },
     postTab: { name: "踏查後・學生平板", who: "學生平板", note: "每個人用自己的平板作答，最後寫明信片交給老師。", icon: "kid" }
   };
-  function modeKey() { return state.phase === "pre" ? "pre" : state.big ? "postBig" : "postTab"; }
+  function modeKey() { return state.mode; }
   function setTitle() {
     $("titleText").innerHTML = zy(TOUR.title);
-    $("subText").textContent = SHARE ? "給家長：我們走過的社區" : TOUR.subtitle + (state.phase ? "　｜　" + MODES[modeKey()].name : "");
+    $("subText").textContent = SHARE ? "給家長：我們走過的社區" : TOUR.subtitle;
+    var mc = $("modeChip");
+    if (MODES[state.mode]) { mc.hidden = false; mc.className = "modeChip m-" + state.mode; mc.innerHTML = "<b>" + MODES[state.mode].name + "</b><small>" + MODES[state.mode].who + "・點這裡切換</small>"; }
+    else mc.hidden = true;
   }
-  // 開場：選擇使用方式
+  // 使用方式視窗（照 info-class 選單樣式）：每次打開都會跳出，各方式的進度分開顯示
+  function progText(key) {
+    var p = state.prog[key], n = ST.filter(function (stn) { return p[stn.id]; }).length;
+    var verb = key === "pre" ? "看過" : "完成";
+    if (!n) return { n: 0, text: "還沒開始" };
+    if (n === ST.length) return { n: n, text: "全部" + verb + "了" };
+    var at = state.atBy[key] != null ? state.atBy[key] : 0;
+    return { n: n, text: verb + " " + n + "／" + ST.length + " 站・停在" + ST[at].name };
+  }
   function showModes() {
     closeMenu();
     var box_ = $("modeBox");
     box_.innerHTML = "";
-    box_.appendChild(el("h2", "", zy(TOUR.title)));
-    box_.appendChild(el("p", "note", "請老師選擇這次的使用方式（之後可以在 ⚙️ 裡切換）"));
-    Object.keys(MODES).forEach(function (key) {
-      var m = MODES[key];
-      var b = el("button", "modeOpt" + (state.phase && key === modeKey() ? " on" : ""),
-        '<span class="mi">' + art(m.icon) + '</span><span class="mt"><b>' + m.name + "</b><em>" + m.who + "</em><small>" + m.note + "</small></span>");
-      b.onclick = function () { setMode(key); };
-      box_.appendChild(b);
+    if (state.mode && state.mode !== "share") save();
+    var top = el("div", "mwTop");
+    top.innerHTML = '<span class="tagk">踏查</span><h2>' + esc(TOUR.title) + '</h2><span class="badge">' + esc(TOUR.subtitle) + "</span>";
+    if (state.mode) {
+      var x = el("button", "btn sm mwX", "✕ 關閉");
+      x.onclick = function () { $("modeScreen").classList.remove("show"); };
+      top.appendChild(x);
+    }
+    box_.appendChild(top);
+    box_.appendChild(el("div", "titlebar", "老師請選擇這一節課的使用方式。三種方式的進度分開記錄，切換不會互相影響。進度只存在這台裝置。"));
+    var grid = el("div", "entries");
+    Object.keys(MODES).forEach(function (key, idx) {
+      var m = MODES[key], pg = progText(key);
+      var card = el("div", "entry m-" + key + (key === state.mode ? " cur" : ""));
+      var band = el("div", "entry-band", '<span class="num">' + (idx + 1) + '</span><span class="deco"><span>' + m.who + "</span></span>" + (key === state.mode ? '<span class="nowtag">目前</span>' : ""));
+      card.appendChild(band);
+      var body = el("div", "entry-body");
+      body.appendChild(el("div", "eicon", art(m.icon)));
+      body.appendChild(el("h2", "", m.name));
+      body.appendChild(el("p", "enote", m.note));
+      var dots = "";
+      ST.forEach(function (stn) { dots += state.prog[key][stn.id] ? "●" : '<span class="off">●</span>'; });
+      var go = el("button", "diff", "<span>" + (pg.n ? "▶ 繼續" : "▶ 開始") + "<small>" + pg.text + '</small></span><span class="lv-r"><span class="dots">' + dots + "</span></span>");
+      go.onclick = function () { setMode(key, false); };
+      body.appendChild(go);
+      if (pg.n) {
+        var again = el("button", "btn sm again", "從頭開始");
+        var armed = false;
+        again.onclick = function () {
+          if (!armed) { armed = true; again.textContent = "再按一次，清除這個方式的進度"; again.classList.add("warn"); setTimeout(function () { armed = false; again.textContent = "從頭開始"; again.classList.remove("warn"); }, 3000); return; }
+          setMode(key, true);
+        };
+        body.appendChild(again);
+      }
+      card.appendChild(body);
+      grid.appendChild(card);
     });
+    box_.appendChild(grid);
     $("modeScreen").classList.add("show");
   }
-  function setMode(key) {
-    var phase = key === "pre" ? "pre" : "post";
-    if (phase !== state.phase) {
-      state.at = 0;
-      walkS = walkTarget = cum[ST[0].at];
-    }
-    state.phase = phase;
+  function setMode(key, fresh) {
+    if (state.mode && state.mode !== "share") state.atBy[state.mode] = state.at;
+    if (fresh) { state.prog[key] = {}; state.atBy[key] = 0; }
+    state.mode = key;
+    state.phase = key === "pre" ? "pre" : "post";
+    state.at = state.atBy[key] || 0;
+    walking = false; arriveCb = null;
+    walkS = walkTarget = cum[ST[state.at].at];
     state.big = key !== "postTab";
     $("modeScreen").classList.remove("show");
-    refresh();
+    closeCard();
     onResize();
-    if (phase === "pre" && nextIndex() === 0) openStation(0);
+    if (key === "pre" && nextIndex() === 0) openStation(0);
   }
   document.title = TOUR.title + "地圖";
   var stampBox = $("stamps");
-  ST.forEach(function (stn) {
-    var s = el("div", "stamp", ART.iconFor(stn));
+  // 印章可以點：老師（或已完成的站）點一下，人物就回到那一站
+  ST.forEach(function (stn, k) {
+    var s = el("button", "stamp", ART.iconFor(stn));
     s.title = stn.name;
+    s.setAttribute("aria-label", "到" + stn.name);
+    s.onclick = function () { chooseStation(k, true); };
     stampBox.appendChild(s);
   });
 
@@ -947,6 +1023,7 @@
     setTitle();
     ST.forEach(function (stn, k) {
       stampBox.children[k].classList.toggle("done", !!prog()[stn.id]);
+      stampBox.children[k].classList.toggle("here", k === state.at && !walking);
       drawSign(k);
     });
     drawCenter();
@@ -995,6 +1072,7 @@
   $("teacherBtn").onclick = function () { state.teacher = !state.teacher; refresh(); };
   $("photoBtn").onclick = function () { closeMenu(); openPhotoPanel(); };
   $("modeBtn").onclick = showModes;
+  $("modeChip").onclick = showModes;
   var resetArmed = false;
   $("resetBtn").onclick = function () {
     if (!resetArmed) {
@@ -1005,7 +1083,7 @@
     }
     resetArmed = false;
     $("resetBtn").textContent = "🔄 重新開始";
-    if (state.phase === "pre") state.seen = {}; else state.done = {};
+    state.prog[state.mode || "postTab"] = {};
     state.at = 0;
     walkS = walkTarget = cum[ST[0].at];
     closeMenu();
@@ -1103,7 +1181,7 @@
     $("card").classList.add("show");
     if (SHARE) { openShareCard(k); return; }
     if (state.phase === "pre") { openPreview(k); return; }
-    if (state.done[ST[k].id]) {
+    if (prog()[ST[k].id]) {
       head();
       var body = el("div");
       body.appendChild(okMsg("這一站已經完成了！"));
@@ -1162,7 +1240,7 @@
     f.appendChild(sp);
     var ok = el("button", "next", zy(k === 0 ? "約好了 ▶" : "看完了 ▶"));
     ok.onclick = function () {
-      state.seen[stn.id] = true;
+      prog()[stn.id] = true;
       closeCard();
       if (nextIndex() === -1) toast(ART.kid("cheer"), "每一站都看過了，準備出發去踏查！");
     };
@@ -1190,7 +1268,7 @@
     var f = foot(body);
     var ok = el("button", "next", zy("看下一站 ▶"));
     ok.onclick = function () {
-      state.seen[stn.id] = true;
+      prog()[stn.id] = true;
       closeCard();
       var n = nextIndex();
       if (n !== -1) chooseStation(n);
@@ -2136,7 +2214,7 @@
 
   function finishStation() {
     var stn = ST[cur.k];
-    state.done[stn.id] = true;
+    prog()[stn.id] = true;
     closeCard();
     if (nextIndex() === -1) toast(ART.kid("cheer"), "完成社區踏查！拿到全部" + zhNum(ST.length) + "個印章！");
     else toast(ART.iconFor(stn), "拿到「" + stn.name + "」的印章！");
@@ -2168,6 +2246,8 @@
         if (cb) setTimeout(cb, 250);
       } else walkS += Math.sign(walkTarget - walkS) * step;
     }
+    kid.scale.setScalar(poofT > 0 ? 1 + Math.sin((1 - poofT / 0.45) * Math.PI) * 0.35 : 1);
+    poofT = Math.max(0, poofT - dt);
     var w = pointAt(walkS);
     kid.position.set(w.p.x, walking ? Math.abs(Math.sin(time * 12)) * 0.25 : 0, w.p.z);
     var dir = walkTarget >= walkS ? w.d : w.d.clone().negate();
@@ -2212,7 +2292,7 @@
   refresh();
   loop();
   if (SHARE) document.body.classList.add("share");
-  else if (!state.phase) showModes();
+  else showModes();
   if (SHARE) {
     // 分享頁只讀公開的 share/photos.json，不讀這台裝置裡的照片
     fetch("share/photos.json", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (d) {
