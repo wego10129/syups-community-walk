@@ -144,12 +144,39 @@
       var body = light ? r.slice(1) : r;
       var tone = "", last = body.charAt(body.length - 1);
       if ("ˊˇˋ".indexOf(last) >= 0) { tone = last; body = body.slice(0, -1); }
-      var col = (light ? '<i class="lt">˙</i>' : "") + body.split("").map(function (s) { return "<i>" + s + "</i>"; }).join("");
-      out += '<span class="zy"><span class="h">' + c + '</span><span class="b"><span class="col">' + col + "</span>" +
-        (tone ? '<span class="tn">' + tone + "</span>" : "") + "</span></span>";
+      // 聲調掛在最後一個符號上：對齊它的上緣（倒數兩個符號的交界）；只有一個符號時放在右側偏上
+      var syms = body.split("");
+      var col = (light ? '<i class="lt">' + TONE_SVG["˙"] + "</i>" : "") + syms.map(function (s, k) {
+        return k === syms.length - 1 && tone ? '<i class="tl">' + s + '<span class="tn' + (syms.length === 1 ? " one" : "") + '">' + TONE_SVG[tone] + "</span></i>" : "<i>" + s + "</i>";
+      }).join("");
+      out += '<span class="zy"><span class="h">' + c + '</span><span class="b' + (tone ? " hasTn" : "") + '"><span class="col">' + col + "</span></span></span>";
     }
     return out;
   }
+  // 聲調自己畫（不用字型裡的 ˊˇˋ˙：各家字型的高低位置都不一樣）
+  var TONE_PATH = { "ˊ": "M2.5 8.5 7.5 1.5", "ˋ": "M2.5 1.5 7.5 8.5", "ˇ": "M1.8 2 5 8 8.2 2" };
+  var TONE_SVG = {};
+  Object.keys(TONE_PATH).forEach(function (t) {
+    TONE_SVG[t] = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="' + TONE_PATH[t] + '" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  });
+  TONE_SVG["˙"] = '<svg viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="1.9" fill="currentColor"/></svg>';
+  // 畫布版：(cx, cy) 是聲調的中心，s 是注音符號的字級
+  function drawTone(ctx, tone, cx, cy, s) {
+    var u = s * 0.042; // 10 個單位 ≈ 0.42 個字
+    ctx.save();
+    ctx.translate(cx - 5 * u, cy - 5 * u);
+    ctx.fillStyle = ctx.strokeStyle = ctx.fillStyle;
+    if (tone === "˙") { ctx.beginPath(); ctx.arc(5 * u, 5 * u, 1.9 * u, 0, 7); ctx.fill(); }
+    else {
+      var pts = TONE_PATH[tone].slice(1).trim().split(/\s+/).map(Number);
+      ctx.beginPath(); ctx.moveTo(pts[0] * u, pts[1] * u);
+      for (var i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i] * u, pts[i + 1] * u);
+      ctx.lineWidth = 1.7 * u; ctx.lineCap = ctx.lineJoin = "round"; ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // 一欄注音的聲調中心高度：k 是最後一個符號的序號，step 是符號間距，top 是第一個符號的中心
+  function toneY(top, k, step, n) { return n === 1 ? top - step * 0.2 : top + (k - 0.5) * step + step * 0.12; }
   // 在畫布上畫有注音的文字（站牌、集點卡用）
   function zyMeasure(ctx, text, size) {
     var w = 0, reads = state.zhuyin ? Z.read(text) : [];
@@ -173,9 +200,9 @@
       ctx.font = zs + "px " + FONT;
       ctx.textAlign = "center";
       var cx = x + size * 1.13, k = 0;
-      if (light) { ctx.fillText("˙", cx, top); k++; }
+      if (light) { drawTone(ctx, "˙", cx, top, zs); k++; }
       for (var j = 0; j < body.length; j++, k++) ctx.fillText(body[j], cx, top + k * zs * 1.02);
-      if (tone) ctx.fillText(tone, cx + zs * 0.75, top + (k - 1) * zs * 1.02 - zs * 0.35);
+      if (tone) drawTone(ctx, tone, cx + zs * 0.72, toneY(top, k - 1, zs * 1.02, body.length), zs);
       ctx.textAlign = "left";
       x += size * 1.42;
     }
@@ -2194,7 +2221,7 @@
     para(t.blessing[1], false);
     var who = "二年" + (pick.cls || "＿") + "班" + (pick.seat || "＿") + "號" + (pick.name || "") + "敬上";
     para(who, false, "right");
-    var cw = 61, chB = 43, gx = 40, gy = 82, gh = H - gy - 46;
+    var cw = 61, chB = 41, gx = 40, gy = 82, gh = H - gy - 46;
     var ch = Math.min(64, Math.floor(gh / Math.max(rows.length, 9)));
     var nRows = Math.min(Math.floor(gh / ch), Math.max(rows.length + 1, 8));
     for (var ri = 0; ri < nRows; ri++) {
@@ -2215,7 +2242,8 @@
         var isP = "，。！：、？".indexOf(chr) >= 0;
         c.fillText(chr, x + chB / 2 + (isP ? -chB * 0.18 : 0), y + (isP ? chB * 0.12 : 1));
         var rd = reads[k];
-        if (rd) zyColumn(c, rd, x + chB + (cw - chB) / 2 - 1, y, (ch - 12) / 4.2);
+        // 注音欄窄：注音往左靠一點，留位置給右邊的聲調
+        if (rd) zyColumn(c, rd, x + chB + (cw - chB) / 2 - 3, y, (ch - 12) / 4.2);
       });
     }
     // 中間分隔線
@@ -2290,9 +2318,9 @@
     var n = body.length + (light ? 1 : 0), top = cy - (n - 1) * zs * 0.55;
     c.font = Math.round(zs) + "px " + FONT; c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#1B2836";
     var k = 0;
-    if (light) { c.fillText("˙", cx, top); k++; }
+    if (light) { drawTone(c, "˙", cx, top, zs); k++; }
     for (var j = 0; j < body.length; j++, k++) c.fillText(body[j], cx, top + k * zs * 1.1);
-    if (tone) c.fillText(tone, cx + zs * 0.62, top + (k - 1) * zs * 1.1 - zs * 0.45);
+    if (tone) drawTone(c, tone, cx + zs * 0.6, toneY(top, k - 1, zs * 1.1, body.length), zs);
   }
 
   function finishStation() {
