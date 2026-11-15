@@ -343,6 +343,9 @@
   .signRow { display: flex; flex-wrap: wrap; gap: 1rem; margin: .2rem 0 .5rem; font-size: 1.15rem; line-height: 2.2; }
   .signRow input { font: inherit; font-size: 1.2rem; width: 6em; padding: .1rem .5rem; border: 3px solid var(--line); border-radius: .7rem; background: #fff; }
   .signRow input[type=number] { width: 4em; }
+  .signRow .need { color: #C0392B; font-size: .95rem; width: 100%; line-height: 1.5; }
+  .nextKid { display: block; width: auto; margin: .6rem 0 0 auto; font-size: 1rem; min-height: 44px; padding: .4rem 1rem; }
+  .nextKid.warn { background: #FF6B4A; color: #fff; }
   canvas.postcard { width: min(100%, 46rem, calc((min(760px, 96vh) - 19rem) * 1.5)); aspect-ratio: 3 / 2; height: auto; display: block; margin: .2rem auto; border-radius: 1rem; box-shadow: 0 6px 18px rgba(0,0,0,.18); }
   .opt:disabled, .next:disabled { opacity: .45; }
   .mailStage { position: relative; height: 22rem; overflow: hidden; }
@@ -364,10 +367,11 @@
   body.share #modeBtn, body.share #photoBtn, body.share #teacherBtn, body.share #resetBtn, body.share #jumpList, body.share #menu hr { display: none; }
 
   /* 使用方式視窗：照 info-class 選單樣式（格線底、粗黑框、彩色標題列） */
-  #modeScreen { position: fixed; inset: 0; background: rgba(27,40,54,.45); display: none; place-items: center; z-index: 40; padding: 12px; }
+  #modeScreen { position: fixed; inset: 0; background: rgba(27,40,54,.6); display: none; place-items: center; z-index: 40; padding: 12px; }
   #modeScreen.show { display: grid; }
   #modeBox { width: min(1100px, 100%); max-height: 96vh; overflow-y: auto; border: 3px solid #1B2836; border-radius: 18px; box-shadow: 6px 6px 0 #1B2836; padding: 16px 18px 20px;
-    background: #E3EDF2 linear-gradient(#D0DEE6 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(90deg, #D0DEE6 1px, transparent 1px) 0 0 / 28px 28px; color: #1B2836; }
+    /* 背景色只能寫在最後一層，寫在第一層整行會失效、變成透明 */
+    background: linear-gradient(#D0DEE6 1px, transparent 1px) 0 0 / 28px 28px, linear-gradient(90deg, #D0DEE6 1px, transparent 1px) 0 0 / 28px 28px, #E3EDF2; color: #1B2836; }
   .mwTop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
   .mwTop h2 { margin: 0; font-size: 26px; }
   .tagk { display: inline-block; background: #FFE066; border: 3px solid #1B2836; border-radius: 10px; padding: 0 8px; box-shadow: 3px 3px 0 #1B2836; font-weight: 900; transform: rotate(-4deg); }
