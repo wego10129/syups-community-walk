@@ -21,7 +21,7 @@
   /* ---------- 進度（只存在這台裝置的瀏覽器裡） ---------- */
   // mode：pre＝出發前（老師大屏，只看不答）、postBig＝踏查後全班回顧、postTab＝踏查後學生平板
   // 三種方式的進度（prog）和人物停在哪一站（atBy）分開記錄，切換不會互相影響
-  var state = { mode: null, phase: null, prog: { pre: {}, postBig: {}, postTab: {}, share: {} }, atBy: {}, at: 0, big: false, teacher: false, zhuyin: true };
+  var state = { mode: null, phase: null, prog: { pre: {}, postBig: {}, postTab: {}, share: {} }, atBy: {}, at: 0, big: false, teacher: false, zhuyin: true, cls: "" };
   try {
     var saved = JSON.parse(localStorage.getItem(KEY) || "null");
     if (saved) {
@@ -2005,7 +2005,7 @@
 
   /* ===== 最後一站：寫明信片（稿紙格一格一字，寄出後存成圖片交給老師） ===== */
   function taskLetter(t, body) {
-    var pick = { r: null, lines: [], seat: "", name: "" };
+    var pick = { r: null, lines: [], cls: state.cls || "", seat: "", name: "" };
     body.appendChild(qLine(t.q));
     body.appendChild(el("div", "step", zy("第一步：你想寫給誰？")));
     var who = el("div", "who");
@@ -2045,26 +2045,36 @@
       foot(b).appendChild(go);
     }
     function stepSign() {
-      var b = page("第三步：寫上你的座號和名字，看看明信片！");
+      var b = page("第三步：寫上你的班級、座號和名字，看看明信片！");
       var form = el("div", "signRow");
-      form.innerHTML = '<label>' + zy("座號") + ' <input id="seatIn" type="number" inputmode="numeric" min="1" max="40" placeholder="5"></label>' +
-        '<label>' + zy("名字") + ' <input id="nameIn" maxlength="6" placeholder="可以不寫"></label>';
+      form.innerHTML = '<label>' + zy("二年") + ' <input id="clsIn" type="number" inputmode="numeric" min="1" max="30" placeholder="1"> ' + zy("班") + '</label>' +
+        '<label>' + zy("座號") + ' <input id="seatIn" type="number" inputmode="numeric" min="1" max="40" placeholder="5"></label>' +
+        '<label>' + zy("名字") + ' <input id="nameIn" maxlength="6" placeholder="王小明"></label>' +
+        '<span class="need"></span>';
       b.appendChild(form);
       var cv = document.createElement("canvas");
       cv.className = "postcard";
       b.appendChild(cv);
-      var seatIn = form.querySelector("#seatIn"), nameIn = form.querySelector("#nameIn");
-      seatIn.value = pick.seat; nameIn.value = pick.name;
+      var clsIn = form.querySelector("#clsIn"), seatIn = form.querySelector("#seatIn"), nameIn = form.querySelector("#nameIn"), need = form.querySelector(".need");
+      clsIn.value = pick.cls; seatIn.value = pick.seat; nameIn.value = pick.name;
       var send = el("button", "next", zy("寄出明信片 ▶"));
       function upd() {
+        pick.cls = clsIn.value.replace(/\D/g, "").slice(0, 2);
         pick.seat = seatIn.value.replace(/\D/g, "").slice(0, 2);
         pick.name = nameIn.value.trim().slice(0, 6);
-        send.disabled = !pick.seat;
+        // 班級記在這台平板上，下一位同學不用再填
+        if (pick.cls !== state.cls) { state.cls = pick.cls; save(); }
+        var miss = [];
+        if (!pick.cls) miss.push("班級");
+        if (!pick.seat) miss.push("座號");
+        if (!pick.name) miss.push("名字");
+        send.disabled = miss.length > 0;
+        need.innerHTML = miss.length ? zy("還要寫：" + miss.join("、")) : "";
         drawPostcard(cv, pick, t, false);
       }
-      seatIn.oninput = upd; nameIn.oninput = upd;
+      clsIn.oninput = upd; seatIn.oninput = upd; nameIn.oninput = upd;
       upd();
-      b.appendChild(el("div", "note", zy("名字只會留在這台平板上，不會上傳到網路。")));
+      b.appendChild(el("div", "note", zy("這個網頁不會把名字傳到網路上；明信片只交給老師。")));
       send.onclick = function () { mailIt(cv); };
       foot(b).appendChild(send);
     }
@@ -2092,13 +2102,40 @@
         give.onclick = function () { givePng(cv2, pick, give); };
         f.appendChild(give);
         f.appendChild(nextBtn("完成 ▶"));
+        // 學生平板：一台平板輪流給好幾位同學用，交完明信片就清掉進度給下一位
+        if (state.mode === "postTab") {
+          var nk = el("button", "next gray nextKid", zy("換下一位同學（清除這台平板的進度）"));
+          var armed = false;
+          nk.onclick = function () {
+            if (!armed) {
+              armed = true; nk.classList.add("warn"); nk.innerHTML = zy("再按一次，清除進度");
+              setTimeout(function () { armed = false; nk.classList.remove("warn"); nk.innerHTML = zy("換下一位同學（清除這台平板的進度）"); }, 3000);
+              return;
+            }
+            nextKid();
+          };
+          b2.appendChild(nk);
+        }
       }
     }
+  }
+  // 換下一位同學：清掉學生平板的進度，人物回到第一站（班級保留）
+  function nextKid() {
+    state.prog.postTab = {};
+    state.atBy.postTab = 0;
+    state.at = 0;
+    walking = false; arriveCb = null;
+    walkS = walkTarget = cum[ST[0].at];
+    closeCard();
+    save();
+    refresh();
+    toast(ART.check(), "清除完成，換下一位同學！");
   }
   // 明信片圖片：平板可以用「分享」直接傳到 LINE、Google 雲端硬碟或 AirDrop；不行就下載
   function givePng(cv, pick, btn) {
     // 檔名用英數字（有些瀏覽器會把中文檔名改成 download）：座號在前，老師收齊後好排序
-    var fname = "postcard-" + (pick.seat.length < 2 ? "0" : "") + pick.seat + "-" + (pick.r.icon || "letter") + ".png";
+    var pad = function (n) { return (n.length < 2 ? "0" : "") + n; };
+    var fname = "postcard-" + pad(pick.cls) + "-" + pad(pick.seat) + "-" + (pick.r.icon || "letter") + ".png";
     function download(blob) {
       try {
         var a = document.createElement("a");
@@ -2108,16 +2145,25 @@
         toast(ART.check(), "已存成圖片：" + fname);
       } catch (e) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); }
     }
-    try {
-      cv.toBlob(function (blob) {
-        if (!blob) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); return; }
-        var file = null;
-        try { file = new File([blob], fname, { type: "image/png" }); } catch (e) {}
-        if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-          navigator.share({ files: [file], title: fname }).catch(function () {});
-        } else download(blob);
-      }, "image/png");
-    } catch (e) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); }
+    function give(blob) {
+      if (!blob) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); return; }
+      var file = null;
+      try { file = new File([blob], fname, { type: "image/png" }); } catch (e) {}
+      if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          navigator.share({ files: [file], title: fname }).then(function () {
+            toast(ART.check(), "交給老師了！");
+          }, function (err) {
+            // 自己按了取消：什麼都不做；其他原因分享失敗：改成下載
+            if (err && err.name === "AbortError") return;
+            download(blob);
+          });
+        } catch (e) { download(blob); }
+      } else download(blob);
+    }
+    // 圖片已經做好就直接分享（還在按鈕的點擊裡）；還沒好才現做
+    if (cv._blob) { give(cv._blob); return; }
+    try { cv.toBlob(give, "image/png"); } catch (e) { toast(ART.think(), "這台裝置不能存檔，請老師直接拍下螢幕。"); }
   }
   // 明信片背面：左邊稿紙格（一格一字＋注音），右邊郵票、郵戳、收件人
   var stampImgs = {};
@@ -2146,7 +2192,7 @@
     para(t.greeting + pick.lines.join(""), true);
     para(t.blessing[0], true);
     para(t.blessing[1], false);
-    var who = "二年級" + (pick.seat ? pick.seat + "號" : "＿號") + (pick.name || "") + "敬上";
+    var who = "二年" + (pick.cls || "＿") + "班" + (pick.seat || "＿") + "號" + (pick.name || "") + "敬上";
     para(who, false, "right");
     var cw = 61, chB = 43, gx = 40, gy = 82, gh = H - gy - 46;
     var ch = Math.min(64, Math.floor(gh / Math.max(rows.length, 9)));
@@ -2203,7 +2249,7 @@
     // 收件人、寄件人
     c.textAlign = "left";
     var stnName = stn ? stn.name : "";
-    [["收件人：", stnName], ["", r.name], ["寄件人：", ST[0].name], ["", "二年級　" + (pick.seat || "＿") + "號　" + (pick.name || "")]].forEach(function (ln, i) {
+    [["收件人：", stnName], ["", r.name], ["寄件人：", ST[0].name], ["", "二年" + (pick.cls || "＿") + "班　" + (pick.seat || "＿") + "號　" + (pick.name || "")]].forEach(function (ln, i) {
       var y = 330 + i * 92;
       c.strokeStyle = "#C9B9A6"; c.lineWidth = 2;
       c.beginPath(); c.moveTo(830, y + 30); c.lineTo(1160, y + 30); c.stroke();
@@ -2231,6 +2277,10 @@
         c.stroke();
       }
       c.restore();
+      // 先把圖片做好：按「交給老師」時直接分享，不用等，iPad 才不會擋掉分享視窗
+      var tok = cv._tok = (cv._tok || 0) + 1;
+      cv._blob = null;
+      try { cv.toBlob(function (bl) { if (cv._tok === tok) cv._blob = bl; }, "image/png"); } catch (e) {}
     }
   }
   // 一個字的注音：在格子右邊的小欄直排，聲調放右上
