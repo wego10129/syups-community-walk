@@ -366,6 +366,36 @@
     return t;
   }
 
+  // 四坡屋頂（廟的屋頂）：底部在 y，寬 w、深 d、高 h
+  function hipRoof(w, d, h, color, y, parent, x, z) {
+    var m = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 4), mat(color));
+    m.rotation.y = Math.PI / 4;
+    var geo = m.geometry.clone(); geo.rotateY(Math.PI / 4); m.geometry = geo; m.rotation.y = 0;
+    m.scale.set(w / Math.SQRT2, h, d / Math.SQRT2);
+    m.position.set(x || 0, y + h / 2, z || 0);
+    (parent || scene).add(m);
+    return m;
+  }
+  // 招牌、匾額：用 canvas 寫字做成貼圖（不加注音，照真實招牌的樣子）
+  function signMesh(text, w, h, o) {
+    var cv = document.createElement("canvas"), S = 128;
+    cv.width = Math.round(w * S); cv.height = Math.round(h * S);
+    var c = cv.getContext("2d");
+    c.fillStyle = o.bg; c.fillRect(0, 0, cv.width, cv.height);
+    c.fillStyle = o.fg; c.textAlign = "center"; c.textBaseline = "middle";
+    if (o.vertical) {
+      var fs = Math.min(cv.width * 0.75, cv.height / (text.length + 0.6));
+      c.font = "bold " + fs + "px " + FONT;
+      for (var i = 0; i < text.length; i++) c.fillText(text[i], cv.width / 2, (i + 0.8) * cv.height / (text.length + 0.6));
+    } else {
+      c.font = "bold " + Math.min(cv.height * 0.7, cv.width / (text.length + 0.4)) + "px " + FONT;
+      c.fillText(text.split("").join(" "), cv.width / 2, cv.height / 2);
+    }
+    var t = new THREE.CanvasTexture(cv);
+    t.encoding = THREE.sRGBEncoding;
+    return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, roughness: LOOK.rough, metalness: 0 }));
+  }
+
   var BUILD = {
     // 三玉國小：依空拍圖配置（南邊是校門，往北依序是前棟、長廊棟、中庭、操場）
     school: function (g) {
@@ -408,27 +438,101 @@
       }
       for (var tz = -10; tz <= 4; tz += 3.5) { tree(-7.8, tz, 0.8, g); tree(7.8, tz, 0.8, g); }
     },
+    // 三玉宮：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：橘紅瓦屋頂＋屋脊上彩色的龍和剪黏、左右兩座多層的鐘鼓樓、紅柱、黑底金字的「三玉宮」匾、
+    // 金色香爐、前面灰藍色的石欄杆、黃色旗子
     temple: function (g) {
-      box(5, 0.5, 4.2, 0xd9c7a8, 0, 0, 0, g);
-      box(4.4, 2.2, 3.4, 0xc8402f, 0, 0.5, 0, g);
-      box(5.6, 0.3, 4.4, 0xe2a03f, 0, 2.7, 0, g);
-      var r = gable(2.4, 5.8, 0x2f8a6d, 2.9, g);
-      r.scale.set(1, 0.6, 1.15);
-      r.position.y = 2.9 + 0.6 * 1.2;
-      box(5.2, 0.25, 0.25, 0xf6c445, 0, 4.95, 0, g);
-      ball(0.35, 0xe2382b, -1.6, 2.3, 1.95, g);
-      ball(0.35, 0xe2382b, 1.6, 2.3, 1.95, g);
-      cyl(0.5, 0.35, 0.8, 0xc9a640, 0, 0, 3.2, g);
-      box(1.1, 1.6, 0.1, 0x8a2a1f, 0, 0.5, 1.72, g);
+      var RED = 0xc23a2e, TILE = 0xd8643c, GOLD = 0xe8b83a, GREEN = 0x2f9a7a, BLUE = 0x3a86c8, STONE = 0x9aa5b1;
+      box(7.4, 0.4, 5.8, 0xcfc8bc, 0, 0, -0.2, g); // 石台
+      // 正殿
+      box(4.6, 2.1, 2.8, RED, 0, 0.4, -0.8, g);
+      box(4.4, 1.5, 0.1, 0x7a2a22, 0, 0.5, 0.62, g); // 門
+      // 正殿屋頂：橘紅瓦的四坡屋頂，四個角往上翹
+      hipRoof(5.6, 3.8, 1.2, TILE, 2.5, g, 0, -0.8);
+      [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (c) {
+        var tip = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.8, 6), mat(TILE));
+        tip.position.set(c[0] * 2.75, 2.75, -0.8 + c[1] * 1.8);
+        tip.rotation.z = c[0] * -0.75; tip.rotation.x = c[1] * 0.75;
+        g.add(tip);
+      });
+      // 屋脊：金色脊＋彩色剪黏＋兩條龍（彎彎的綠色身體）＋中間的寶塔
+      box(3.4, 0.2, 0.3, GOLD, 0, 3.45, -0.8, g);
+      for (var i = -3; i <= 3; i++) ball(0.16, [GREEN, BLUE, GOLD, 0xe2553a][(i + 8) % 4], i * 0.5, 3.8, -0.8, g);
+      [-1, 1].forEach(function (sx) {
+        var dragon = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.13, 8, 16, Math.PI * 1.2), mat(GREEN));
+        dragon.position.set(sx * 1.25, 3.85, -0.8); dragon.rotation.z = sx > 0 ? 0.3 : Math.PI - 1.2 + 0.3; g.add(dragon);
+        ball(0.2, GOLD, sx * 1.85, 4.0, -0.8, g); // 龍頭
+      });
+      cyl(0.08, 0.3, 0.7, GOLD, 0, 3.6, -0.8, g, 8);
+      ball(0.18, 0xe2553a, 0, 4.4, -0.8, g);
+      // 前殿（三川門）：紅柱、小屋頂、黑底金字匾額
+      [-1.7, -0.6, 0.6, 1.7].forEach(function (x) { cyl(0.16, 0.16, 2.0, Math.abs(x) < 1 ? 0x6e7680 : RED, x, 0.4, 1.3, g, 10); }); // 中間兩根是石雕龍柱
+      hipRoof(4.8, 2.0, 0.6, TILE, 2.4, g, 0, 1.2);
+      box(2.6, 0.16, 0.16, GOLD, 0, 2.86, 1.2, g);
+      var plaque = signMesh("三玉宮", 1.9, 0.5, { bg: "#1e1a18", fg: "#f2c14e" });
+      plaque.position.set(0, 2.05, 1.95); g.add(plaque);
+      ball(0.22, 0xe2382b, -1.15, 2.0, 1.9, g); // 紅燈籠
+      ball(0.22, 0xe2382b, 1.15, 2.0, 1.9, g);
+      // 左右鐘鼓樓：灰色塔身＋三層綠金色屋頂
+      [-1, 1].forEach(function (sx) {
+        var x = sx * 3.0;
+        box(1.4, 3.0, 1.4, 0xb7b0a6, x, 0.4, -0.6, g);
+        box(1.0, 0.5, 0.1, RED, x, 1.4, 0.12, g);
+        for (var t = 0; t < 3; t++) {
+          var y = 3.4 + t * 0.85, r = 1.25 - t * 0.25;
+          pyramid(r, 0.55, t % 2 ? GOLD : GREEN, y, g, x, -0.6);
+          box(r * 1.15, 0.3, r * 1.15, RED, x, y - 0.3, -0.6, g);
+        }
+        ball(0.2, GOLD, x, 6.15, -0.6, g);
+      });
+      // 金色香爐
+      cyl(0.45, 0.35, 0.55, GOLD, 0, 0.4, 2.0, g, 10);
+      cyl(0.12, 0.25, 0.5, GOLD, 0, 0.95, 2.0, g, 8);
+      // 灰藍色石欄杆（中間留出入口）＋黃色旗子
+      [-1, 1].forEach(function (sx) {
+        box(2.5, 0.65, 0.22, STONE, sx * 2.35, 0.4, 2.65, g);
+        for (var q = 0; q < 4; q++) box(0.26, 0.85, 0.26, 0xb9c1ca, sx * (1.2 + q * 0.75), 0.4, 2.65, g);
+        cyl(0.04, 0.04, 2.0, 0x8a6142, sx * 1.4, 0.4, 2.9, g, 6);
+        box(0.05, 0.75, 0.5, 0xf2c94c, sx * 1.4, 1.6, 3.15, g);
+      });
     },
+    // 臺灣銀行天母分行：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：粉紅色石材的四層大樓、深色橫向窗帶、右後方較高的塔樓（上面有圓形行徽）、
+    // 轉角的直立招牌（白底紅字「臺灣銀行」）、門口低矮的雨遮、綠色樹籬
     bank: function (g) {
-      box(5.6, 0.4, 4, 0xd7d2c8, 0, 0, 0, g);
-      box(5, 3.2, 3.4, 0xf1ede4, 0, 0.4, 0, g);
-      for (var k = -1.8; k <= 1.8; k += 1.2) cyl(0.2, 0.2, 2.8, 0xffffff, k, 0.4, 1.9, g, 10);
-      box(5.6, 0.5, 4.2, 0x2e7d6b, 0, 3.6, 0, g);
-      box(3.6, 0.6, 0.1, 0x2e7d6b, 0, 2.6, 2.3, g);
-      box(0.9, 1.5, 0.6, 0x8c9aa6, 2.9, 0, 2.2, g); // 提款機
-      box(0.6, 0.4, 0.05, 0x9fd3ef, 2.9, 0.9, 2.52, g);
+      var PINK = 0xe2bfb2, PINK2 = 0xd3aa9c, WIN = 0x4a3c36;
+      box(6.6, 0.3, 4.8, 0xc9b8ae, 0, 0, 0, g); // 人行道與台階
+      box(6.0, 4.4, 3.6, PINK, 0, 0.3, -0.3, g); // 主樓
+      for (var f = 0; f < 3; f++) {
+        var y = 1.75 + f * 0.95;
+        box(5.6, 0.5, 0.1, WIN, 0, y, 1.52, g); // 正面窗帶
+        box(0.1, 0.5, 3.0, WIN, 3.02, y, -0.3, g); // 側面窗帶
+        box(0.1, 0.5, 3.0, WIN, -3.02, y, -0.3, g);
+      }
+      box(6.2, 0.25, 3.8, PINK2, 0, 4.7, -0.3, g); // 屋頂邊
+      // 右後方的塔樓＋圓形行徽
+      box(1.7, 6.0, 1.7, PINK, 2.0, 0.3, -1.0, g);
+      for (var r = 0; r < 2; r++) for (var c = 0; c < 3; c++) box(0.3, 0.32, 0.06, WIN, 1.5 + c * 0.5, 5.2 + r * 0.5, -0.12, g);
+      cyl(0.42, 0.42, 0.08, 0xb98a7c, 2.0, 0, 0, g, 20).position.set(2.0, 4.3, -0.13);
+      g.children[g.children.length - 1].rotation.x = Math.PI / 2;
+      // 一樓：門口雨遮、深色大門、刻字
+      box(3.4, 0.35, 1.2, PINK2, -0.6, 1.5, 1.9, g);
+      box(0.3, 1.2, 0.3, PINK2, -2.1, 0.3, 2.3, g);
+      box(0.3, 1.2, 0.3, PINK2, 0.9, 0.3, 2.3, g);
+      box(2.6, 1.1, 0.1, WIN, -0.6, 0.3, 1.52, g);
+      var carved = signMesh("臺灣銀行", 1.8, 0.28, { bg: "#d3aa9c", fg: "#8a5a4c" });
+      carved.position.set(-0.6, 1.68, 2.51); g.add(carved);
+      // 轉角的直立招牌：白底紅字
+      box(0.2, 2.6, 0.2, 0xdedede, -3.0, 0.3, 2.1, g);
+      var vsign = signMesh("臺灣銀行", 0.62, 2.1, { bg: "#ffffff", fg: "#c0392b", vertical: true });
+      vsign.position.set(-3.0, 2.0, 2.22); g.add(vsign);
+      // 提款機（「找找看」要找的東西）
+      box(0.8, 1.4, 0.5, 0x8c9aa6, 2.3, 0.3, 1.75, g);
+      box(0.55, 0.38, 0.05, 0x9fd3ef, 2.3, 1.15, 2.02, g);
+      // 綠色樹籬和小樹
+      box(1.6, 0.5, 0.6, 0x4f9a55, 1.2, 0.3, 2.9, g);
+      box(1.4, 0.5, 0.6, 0x4f9a55, -1.9, 0.3, 2.9, g);
+      tree(3.0, 2.4, 0.6, g);
     },
     post: function (g) {
       box(5, 3, 3.6, 0xeff0e6, 0, 0, 0, g);
@@ -726,9 +830,26 @@
     scene.add(g);
     return g;
   }
+  // 背影小隊：老師走在最前面，後面跟著戴小黃帽、背書包的小朋友（照片只拍背影，地圖上也用背影）
+  // kid 是隊伍的位置（鏡頭跟著它），其他人沿著路線排在前後
   var kid = person(0x4a7fc1, 0xf6c445);
   box(0.5, 0.6, 0.25, 0xe8704a, 0, 0.55, -0.38, kid);
-  kid.scale.setScalar(1.4);
+  var squad = [];
+  function teacherPerson() {
+    var t = person(0x2f8a6d, null);
+    t.scale.setScalar(1.3);
+    box(0.08, 0.5, 0.35, 0xf2c94c, 0.42, 0.5, 0, t); // 手上的小旗子桿
+    box(0.04, 0.35, 0.5, 0xe8704a, 0.42, 1.05, 0.25, t);
+    return t;
+  }
+  [[1.3, 0, "teacher"], [-0.9, 0.38, 0xd8473a, 0x4a7fc1], [-0.9, -0.38, 0xf0a030, 0x3f9b5f], [-1.8, 0.38, 0x9a6fc1, 0xe8704a], [-1.8, -0.38, 0x3f9b5f, 0xd8473a]]
+    .forEach(function (m) {
+      var p;
+      if (m[2] === "teacher") p = teacherPerson();
+      else { p = person(m[2], 0xf6c445); box(0.5, 0.6, 0.25, m[3], 0, 0.55, -0.38, p); }
+      squad.push({ obj: p, back: m[0], side: m[1], ph: Math.random() * 6 });
+    });
+  var squadDir = 1;
   var shadow = new THREE.Mesh(new THREE.CircleGeometry(0.7, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18 }));
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.y = 0.11;
@@ -1376,6 +1497,13 @@
     var dir = walkTarget >= walkS ? w.d : w.d.clone().negate();
     if (walking) kid.rotation.y = Math.atan2(dir.x, dir.z);
     shadow.position.set(w.p.x, 0.11, w.p.z);
+    if (walking) squadDir = walkTarget >= walkS ? 1 : -1;
+    squad.forEach(function (m) {
+      var q = pointAt(walkS + m.back * squadDir), d = squadDir > 0 ? q.d : q.d.clone().negate();
+      m.obj.position.set(q.p.x - d.z * m.side, walking ? Math.abs(Math.sin(time * 12 + m.ph)) * 0.22 : 0, q.p.z + d.x * m.side);
+      m.obj.rotation.y = Math.atan2(d.x, d.z);
+      m.obj.visible = poofT <= 0;
+    });
     walkers.forEach(function (wk) {
       wk.t += dt * 0.06;
       var f = (Math.sin(wk.t * Math.PI * 2) + 1) / 2;
