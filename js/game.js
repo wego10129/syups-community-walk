@@ -837,6 +837,7 @@
   }
   // 點站牌或上方的地點：下一站就走過去，其他站直接跳過去
   function chooseStation(k) {
+    if (tour.on) stopTour();
     if (walking) return;
     if (k === state.at) { openStation(k); return; }
     if (k === nextIndex()) walkTo(k, function () { openStation(k); });
@@ -890,6 +891,7 @@
     save();
   }
   $("goBtn").onclick = function () {
+    if (tour.on) stopTour();
     if (walking) return;
     var n = nextIndex();
     if (!state.visited[ST[state.at].id]) openStation(state.at);
@@ -974,13 +976,14 @@
     if (showIdx >= list.length) showIdx = 0;
     sheet.innerHTML = "";
     var head = el("div", "head", '<span class="hi">' + ART.iconFor(stn) + "</span><h2>" + zy(stn.name) + "</h2>");
-    var x = el("button", "x", "✕"); x.setAttribute("aria-label", "關閉"); x.onclick = closeCard;
+    var x = el("button", "x", "✕"); x.setAttribute("aria-label", "關閉"); x.onclick = function () { if (tour.on) stopTour(); else closeCard(); };
     head.appendChild(x);
     sheet.appendChild(head);
 
     // 照片
     var ph = el("div", "photos");
-    if (list.length) {
+    if (tour.on && !list.length) { /* 導覽中：沒有照片就不顯示放照片的框 */ }
+    else if (list.length) {
       var big = el("div", "bigPhoto");
       big.style.backgroundImage = "url(" + list[showIdx] + ")";
       ph.appendChild(big);
@@ -1016,11 +1019,13 @@
     if (stn.learn) {
       var lr = el("button", "block learn", '<div class="lb">' + ICON.star + zy("我們學到") + '<small>（點一下打開）</small></div><div class="ans">' + zy(stn.learn) + "</div>");
       lr.onclick = function () { lr.classList.add("open"); };
+      if (tour.on) lr.classList.add("open");
       sheet.appendChild(lr);
     }
 
     var foot = el("div", "foot");
     var n = k + 1 < ST.length ? k + 1 : -1;
+    if (tour.on) foot.style.display = "none";
     var nx = el("button", "btn", zy(n === -1 ? "做家長分享圖" : "▶ 下一站：" + ST[n].name));
     nx.onclick = function () { closeCard(); if (n === -1) openShare(); else chooseStation(n); };
     foot.appendChild(nx);
@@ -1036,6 +1041,103 @@
     document.body.classList.remove("carded");
     onResize();
   }
+
+  /* ---------- 再走一次：自動導覽（參考 HEART 政策島的導覽做法，程式自己寫） ----------
+   * 人物自己從學校走完全程，每到一站打開卡片、輪播照片，停 TOUR_SEC 秒再走下一站。
+   * 空白鍵暫停、Esc 離開、H 隱藏按鈕（錄影用）。 */
+  var TOUR_SEC = 9;
+  var tour = { on: false, paused: false, k: 0, left: 0, phase: "", last: 0 };
+  function tourBar() {
+    $("tourBar").hidden = !tour.on;
+    $("tourPause").textContent = tour.paused ? "▶ 繼續" : "❚❚ 暫停";
+    $("tourCount").textContent = (tour.k + 1) + " / " + ST.length + "　" + ST[tour.k].name;
+    document.body.classList.toggle("touring", tour.on);
+  }
+  function startTour() {
+    closeMenu(); closeIntro();
+    if ($("share").classList.contains("show")) closeShare();
+    tour.on = true; tour.paused = false; tour.k = 0;
+    document.body.classList.remove("capture");
+    camMode = "follow"; $("viewBtn").classList.remove("on");
+    teleport(0, function () { tourArrive(); });
+    tourBar();
+  }
+  function tourArrive() {
+    if (!tour.on) return;
+    showIdx = 0;
+    openStation(tour.k);
+    tour.phase = "dwell"; tour.left = TOUR_SEC; tour.photoT = 0;
+    tourBar();
+  }
+  function tourNext() {
+    if (tour.k + 1 >= ST.length) { tour.phase = "end"; finishTour(); return; }
+    closeCard();
+    tour.phase = "walk";
+    tour.k++;
+    tourBar();
+    walkTo(tour.k, function () { tourArrive(); });
+  }
+  function finishTour() {
+    stopTour();
+    toast(ART.kid("cheer"), "我們走完一圈了！");
+  }
+  function stopTour() {
+    if (!tour.on) return;
+    tour.on = false; tour.phase = "";
+    document.body.classList.remove("capture");
+    tourBar();
+    if (cardOpen()) openStation(state.at); // 換回一般的卡片
+  }
+  // 每一幀呼叫：倒數停留時間、輪播照片
+  function tourTick(dt) {
+    if (!tour.on || tour.paused || tour.phase !== "dwell") return;
+    tour.left -= dt;
+    var list = photos[ST[tour.k].id] || [];
+    if (list.length > 1) {
+      tour.photoT += dt;
+      if (tour.photoT > TOUR_SEC / list.length) { tour.photoT = 0; showIdx = (showIdx + 1) % list.length; openStation(tour.k); }
+    }
+    if (tour.left <= 0) tourNext();
+  }
+  $("tourBtn").onclick = startTour;
+  $("tourMenuBtn").onclick = startTour;
+  $("tourPause").onclick = function () { tour.paused = !tour.paused; tourBar(); };
+  $("tourReplay").onclick = startTour;
+  $("tourStop").onclick = function () { stopTour(); closeCard(); };
+
+  /* ---------- 第一次打開：三張說明卡（參考兩座政策島的引導；看過就不再跳，按「?」可以重看） ---------- */
+  var INTRO = [
+    ["這是我們走過的社區", "地圖照真實的路線做成。按下方的大按鈕，人物會一站一站走過去，每一站有「找找看」「說說看」「我們學到」。"],
+    ["每一站都能放照片", "點站牌或上方的地點打開卡片，按「放照片」從相簿選照片，一站最多三張。請只拍孩子的背影。"],
+    ["走完可以再走一次", "按「再走一次」，人物會自己走完全程、輪播每一站的照片，適合課堂回顧或錄影給家長。最後在設定裡「做家長分享圖」，傳到班級 LINE 群組。"]
+  ];
+  var introK = 0, seenIntro = false;
+  function showIntro(k) {
+    introK = k || 0;
+    var it = INTRO[introK], box = $("introBox");
+    box.innerHTML = "";
+    var x = el("button", "x", "✕"); x.setAttribute("aria-label", "關閉"); x.onclick = closeIntro;
+    box.appendChild(x);
+    box.appendChild(el("div", "introCount", "使用說明 " + (introK + 1) + " / " + INTRO.length));
+    box.appendChild(el("h3", "", it[0]));
+    box.appendChild(el("p", "note", it[1]));
+    var row = el("div", "row");
+    var skip = el("button", "btn gray", "略過");
+    skip.onclick = closeIntro;
+    var nx = el("button", "btn", introK < INTRO.length - 1 ? "下一步 →" : "開始使用");
+    nx.onclick = function () { if (introK < INTRO.length - 1) showIntro(introK + 1); else closeIntro(); };
+    row.appendChild(skip); row.appendChild(nx);
+    box.appendChild(row);
+    $("intro").classList.add("show");
+    nx.focus();
+  }
+  function closeIntro() {
+    if (!$("intro").classList.contains("show")) return;
+    $("intro").classList.remove("show");
+    try { localStorage.setItem("community-walk-intro", "1"); } catch (e) {}
+  }
+  $("intro").addEventListener("click", function (e) { if (e.target === $("intro")) closeIntro(); });
+  $("helpBtn").onclick = function () { closeMenu(); showIntro(0); };
 
   /* ---------- 照片備份（換電腦時搬照片） ---------- */
   $("backupBtn").onclick = function () {
@@ -1203,8 +1305,13 @@
   // 彈跳視窗：× 、Esc、點外面都能關（做圖中暫時不能關）
   $("share").addEventListener("click", function (e) { if (e.target === $("share")) closeShare(); });
   document.addEventListener("keydown", function (e) {
+    var tag = document.activeElement && document.activeElement.tagName;
+    if (tour.on && e.code === "Space" && tag !== "INPUT" && tag !== "BUTTON") { e.preventDefault(); $("tourPause").click(); return; }
+    if (tour.on && (e.key === "h" || e.key === "H")) { document.body.classList.toggle("capture"); return; }
     if (e.key !== "Escape") return;
-    if ($("share").classList.contains("show")) closeShare();
+    if ($("intro").classList.contains("show")) closeIntro();
+    else if (tour.on) { stopTour(); closeCard(); }
+    else if ($("share").classList.contains("show")) closeShare();
     else if (cardOpen()) closeCard();
     else closeMenu();
   });
@@ -1251,7 +1358,8 @@
   function loop() {
     var dt = Math.min(clock.getDelta(), 0.05);
     var time = clock.elapsedTime;
-    if (walking) {
+    tourTick(dt);
+    if (walking && !(tour.on && tour.paused)) {
       var step = 9 * dt;
       if (Math.abs(walkTarget - walkS) <= step) {
         walkS = walkTarget;
@@ -1310,6 +1418,8 @@
   loop();
   dbOpen(function () { dbAll(function () { ST.forEach(function (_, k) { photoSprite(k); }); }); });
 
+  try { seenIntro = localStorage.getItem("community-walk-intro") === "1"; } catch (e) {}
+  if (!seenIntro) setTimeout(function () { showIntro(0); }, 600);
   window.__ok = true;
-  window.__walk = { state: state, openStation: openStation, chooseStation: chooseStation, openShare: openShare, makePoster: makePoster };
+  window.__walk = { state: state, openStation: openStation, chooseStation: chooseStation, openShare: openShare, makePoster: makePoster, startTour: startTour, tour: tour };
 })();
