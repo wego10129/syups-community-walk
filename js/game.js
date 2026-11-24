@@ -53,17 +53,7 @@
     var d = new Date();
     return zhNum(d.getMonth() + 1) + "月" + zhNum(d.getDate()) + "日";
   }
-  function speak(text) {
-    if (!("speechSynthesis" in window)) return;
-    try {
-      speechSynthesis.cancel();
-      var clean = text.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{20E3}]/gu, "");
-      var u = new SpeechSynthesisUtterance(clean);
-      u.lang = "zh-TW";
-      u.rate = 0.85;
-      speechSynthesis.speak(u);
-    } catch (e) {}
-  }
+
 
   var ART = window.ART;
   // 站的小圖示做成圖片，畫到 3D 站牌上
@@ -164,6 +154,7 @@
     renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
   } catch (e) {
     $("err").style.display = "grid";
+    window.__ok = true; // 已經用中文說明原因
     return;
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -961,6 +952,18 @@
     inp.click();
   }
 
+  /* ---------- 自繪小圖示（手冊：給大人看的頁面不用 emoji） ---------- */
+  function ic(body) { return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="#1B2836" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' + body + "</svg>"; }
+  var ICON = {
+    camera: ic('<rect x="3" y="7" width="18" height="13" rx="3" fill="#FEF3C7"/><path d="M8 7l1.5-3h5L16 7"/><circle cx="12" cy="13.5" r="3.5" fill="#fff"/>'),
+    look: ic('<circle cx="10.5" cy="10.5" r="6" fill="#fff"/><path d="M15 15l5 5"/>'),
+    talk: ic('<path d="M4 5h16v11H10l-4 4v-4H4z" fill="#fff"/>'),
+    star: ic('<path d="M12 3l2.7 5.6 6.1.8-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.8z" fill="#FACC15"/>'),
+    gear: ic('<circle cx="12" cy="12" r="3.2" fill="#fff"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>')
+  };
+  $("menuBtn").innerHTML = ICON.gear;
+  $("viewBtn").innerHTML = ART.map();
+
   /* ---------- 地點卡：照片在右邊，3D 在左邊 ---------- */
   var card = $("card"), sheet = $("sheet"), showIdx = 0;
   function openStation(k) {
@@ -994,7 +997,7 @@
       if (list.length < MAXP) { var add = el("button", "th add", "＋"); add.title = "再放一張"; add.onclick = function () { pickFiles(k); }; row.appendChild(add); }
       ph.appendChild(row);
     } else {
-      var empty = el("button", "emptyPhoto", '<span class="ei">📷</span><span>' + zy("放照片") + "</span><small>點這裡，從相簿選照片（最多三張）</small>");
+      var empty = el("button", "emptyPhoto", '<span class="ei">' + ICON.camera + "</span><span>" + zy("放照片") + "</span><small>點這裡，從相簿選照片（最多三張）</small>");
       empty.onclick = function () { pickFiles(k); };
       ph.appendChild(empty);
     }
@@ -1008,18 +1011,15 @@
       rb.appendChild(ol);
       sheet.appendChild(rb);
     }
-    if (stn.lookFor) { sheet.appendChild(el("div", "block look", '<div class="lb">🔍 ' + zy("找找看") + "</div><div>" + zy(stn.lookFor) + "</div>")); say.push(stn.lookFor); }
-    if (stn.talk) { sheet.appendChild(el("div", "block talk", '<div class="lb">💬 ' + zy("說說看") + "</div><div>" + zy(stn.talk) + "</div>")); say.push(stn.talk); }
+    if (stn.lookFor) { sheet.appendChild(el("div", "block look", '<div class="lb">' + ICON.look + zy("找找看") + "</div><div>" + zy(stn.lookFor) + "</div>")); say.push(stn.lookFor); }
+    if (stn.talk) { sheet.appendChild(el("div", "block talk", '<div class="lb">' + ICON.talk + zy("說說看") + "</div><div>" + zy(stn.talk) + "</div>")); say.push(stn.talk); }
     if (stn.learn) {
-      var lr = el("button", "block learn", '<div class="lb">⭐ ' + zy("我們學到") + '<small>（點一下打開）</small></div><div class="ans">' + zy(stn.learn) + "</div>");
-      lr.onclick = function () { lr.classList.add("open"); speak(stn.learn); };
+      var lr = el("button", "block learn", '<div class="lb">' + ICON.star + zy("我們學到") + '<small>（點一下打開）</small></div><div class="ans">' + zy(stn.learn) + "</div>");
+      lr.onclick = function () { lr.classList.add("open"); };
       sheet.appendChild(lr);
     }
 
     var foot = el("div", "foot");
-    var sp = el("button", "btn gray", "🔊 " + zy("念給大家聽"));
-    sp.onclick = function () { speak(say.join("。")); };
-    foot.appendChild(sp);
     var n = k + 1 < ST.length ? k + 1 : -1;
     var nx = el("button", "btn", zy(n === -1 ? "做家長分享圖" : "▶ 下一站：" + ST[n].name));
     nx.onclick = function () { closeCard(); if (n === -1) openShare(); else chooseStation(n); };
@@ -1034,7 +1034,6 @@
   function closeCard() {
     card.classList.remove("show");
     document.body.classList.remove("carded");
-    try { speechSynthesis.cancel(); } catch (e) {}
     onResize();
   }
 
@@ -1166,7 +1165,9 @@
     if (cardOpen()) closeCard();
     var box = $("shareBox"), have = ST.filter(function (s) { return (photos[s.id] || []).length; }).length;
     box.innerHTML = "";
-    box.appendChild(el("h3", "", "👪 家長分享圖"));
+    var sx = el("button", "x", "✕"); sx.setAttribute("aria-label", "關閉"); sx.onclick = closeShare;
+    box.appendChild(sx);
+    box.appendChild(el("h3", "", "家長分享圖"));
     box.appendChild(el("p", "note", "把今天走過的地圖、每一站的照片和學到的事，做成一張長圖，直接傳到班級 LINE 群組。" +
       (have ? "目前有 " + have + " 站放了照片。" : "<b>還沒有放照片</b>：在每一站的卡片上點「放照片」。")));
     var lb = el("label", "check", '<input type="checkbox" id="shareOk"> 我確認照片只拍到背影，沒有拍到臉、名牌、書包或水壺上的名字');
@@ -1174,15 +1175,16 @@
     var row = el("div", "row");
     var mk = el("button", "btn", "做分享圖");
     var cl = el("button", "btn gray", "關閉");
-    cl.onclick = function () { $("share").classList.remove("show"); };
+    cl.onclick = closeShare;
     row.appendChild(mk); row.appendChild(cl);
     box.appendChild(row);
     var out = el("div", "out");
     box.appendChild(out);
     mk.onclick = function () {
       if (!$("shareOk").checked) { toast(ART.think(), "請先勾選確認：照片只拍到背影。"); return; }
-      mk.disabled = true; mk.textContent = "做圖中…";
+      mk.disabled = true; mk.textContent = "做圖中…"; making = true;
       makePoster().then(function (cv) {
+        making = false;
         mk.disabled = false; mk.textContent = "重新做一次";
         out.innerHTML = "";
         var url = cv.toDataURL("image/jpeg", 0.88);
@@ -1196,6 +1198,16 @@
     };
     $("share").classList.add("show");
   }
+  var making = false;
+  function closeShare() { if (!making) $("share").classList.remove("show"); }
+  // 彈跳視窗：× 、Esc、點外面都能關（做圖中暫時不能關）
+  $("share").addEventListener("click", function (e) { if (e.target === $("share")) closeShare(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    if ($("share").classList.contains("show")) closeShare();
+    else if (cardOpen()) closeCard();
+    else closeMenu();
+  });
   function givePoster(cv) {
     var d = new Date(), fname = "community-walk-" + (d.getMonth() + 1) + "-" + d.getDate() + ".jpg";
     function download(blob) {
@@ -1298,5 +1310,6 @@
   loop();
   dbOpen(function () { dbAll(function () { ST.forEach(function (_, k) { photoSprite(k); }); }); });
 
+  window.__ok = true;
   window.__walk = { state: state, openStation: openStation, chooseStation: chooseStation, openShare: openShare, makePoster: makePoster };
 })();
