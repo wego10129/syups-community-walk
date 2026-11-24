@@ -132,55 +132,37 @@
   /* ---------- 注音 ---------- */
   var Z = window.ZHUYIN;
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
-  // 把一段文字變成「國字＋右側直排注音」的 HTML
-  function zy(text) {
-    text = String(text);
-    if (!state.zhuyin) return esc(text);
+  // 注音做法照 class-games：注音字型 CW Bpmf（js/bpmf-font.js），國字和注音是同一個字形。
+  // 破音字在字後面加異體字選擇子：第 n 個讀音（從 0 起算）加 U+E01E0+n，讀音順序見 BPMF_ORDER。
+  var ORDER = window.BPMF_ORDER || {};
+  function zyStr(text) {
     var reads = Z.read(text), out = "";
     for (var i = 0; i < text.length; i++) {
-      var c = text[i], r = reads[i];
-      if (!r) { out += esc(c); continue; }
-      var light = r.charAt(0) === "˙";
-      var body = light ? r.slice(1) : r;
-      var tone = "", last = body.charAt(body.length - 1);
-      if ("ˊˇˋ".indexOf(last) >= 0) { tone = last; body = body.slice(0, -1); }
-      var col = (light ? '<i class="lt">˙</i>' : "") + body.split("").map(function (s) { return "<i>" + s + "</i>"; }).join("");
-      out += '<span class="zy"><span class="h">' + c + '</span><span class="b"><span class="col">' + col + "</span>" +
-        (tone ? '<span class="tn">' + tone + "</span>" : "") + "</span></span>";
+      var c = text[i], list = ORDER[c], n = list && reads[i] ? list.indexOf(reads[i]) : -1;
+      out += c + (n > 0 ? String.fromCodePoint(0xE01E0 + n) : "");
     }
     return out;
   }
+  function zy(text) {
+    text = String(text);
+    if (!state.zhuyin) return esc(text);
+    return '<span class="zyt">' + esc(zyStr(text)) + "</span>";
+  }
   // 在畫布上畫有注音的文字（站牌、集點卡用）
+  function zyFont(size) { return state.zhuyin ? size + "px " + ZFONT : "bold " + size + "px " + FONT; }
   function zyMeasure(ctx, text, size) {
-    var w = 0, reads = state.zhuyin ? Z.read(text) : [];
-    ctx.font = "bold " + size + "px " + FONT;
-    for (var i = 0; i < text.length; i++) w += reads[i] ? size * 1.42 : ctx.measureText(text[i]).width;
-    return w;
+    ctx.font = zyFont(size);
+    return ctx.measureText(state.zhuyin ? zyStr(text) : text).width;
   }
   function zyDraw(ctx, text, x, y, size, color) {
-    var reads = state.zhuyin ? Z.read(text) : [];
     ctx.fillStyle = color || "#3b2f2a";
     ctx.textBaseline = "middle";
     ctx.textAlign = "left";
-    for (var i = 0; i < text.length; i++) {
-      var c = text[i], r = reads[i];
-      ctx.font = "bold " + size + "px " + FONT;
-      if (!r) { ctx.fillText(c, x, y); x += ctx.measureText(c).width; continue; }
-      ctx.fillText(c, x, y);
-      var light = r.charAt(0) === "˙", body = light ? r.slice(1) : r, tone = "";
-      if ("ˊˇˋ".indexOf(body.charAt(body.length - 1)) >= 0) { tone = body.charAt(body.length - 1); body = body.slice(0, -1); }
-      var zs = size * 0.3, n = body.length + (light ? 1 : 0), top = y - (n * zs * 1.02) / 2 + zs / 2;
-      ctx.font = zs + "px " + FONT;
-      ctx.textAlign = "center";
-      var cx = x + size * 1.13, k = 0;
-      if (light) { ctx.fillText("˙", cx, top); k++; }
-      for (var j = 0; j < body.length; j++, k++) ctx.fillText(body[j], cx, top + k * zs * 1.02);
-      if (tone) ctx.fillText(tone, cx + zs * 0.75, top + (k - 1) * zs * 1.02 - zs * 0.35);
-      ctx.textAlign = "left";
-      x += size * 1.42;
-    }
+    ctx.font = zyFont(size);
+    ctx.fillText(state.zhuyin ? zyStr(text) : text, x, y);
   }
   var FONT = "'PingFang TC','Microsoft JhengHei','Noto Sans TC',sans-serif";
+  var ZFONT = "'CW Bpmf'," + FONT;
 
   /* ---------- 照片（老師設定，存在這台裝置的 IndexedDB） ---------- */
   var photos = {}; // id -> dataURL
@@ -2373,6 +2355,8 @@
   });
   shadow.visible = false;
   refresh();
+  // 注音字型載入後，重畫站牌（畫布不會自動換字型）
+  if (document.fonts && document.fonts.load) document.fonts.load("40px 'CW Bpmf'", "三").then(function () { refresh(); });
   loop();
   if (SHARE) document.body.classList.add("share");
   else if (STUDENT) { document.body.classList.add("student"); onResize(); }

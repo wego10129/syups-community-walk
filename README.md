@@ -44,6 +44,7 @@
 | `js/art.js` | 小遊戲的角色與圖示（SVG，風格照 class-games） |
 | `index.html` | 頁面與樣式 |
 | `js/zhuyin.js` | 注音字典（由 `tools/build-zhuyin.js` 產生；多音字改 `tools/zhuyin-overrides.js`） |
+| `js/bpmf-font.js` | 注音字型（做法照 class-games：Bpmf Zihi Kai Std，SIL OFL 1.1，只含用到的字）。改了題目、加了新的字，要跑 `tools/build-bpmf-font.py` 重新產生 |
 | `vendor/three.min.js` | Three.js r149（放在本機，不靠外部 CDN） |
 | `prompt/社區踏查島提示詞.md` | 給其他學校的提示詞：貼給 Claude，用 Artifact 做出自己學區的踏查地圖 |
 | `prompt/tour.template.js` | 資料範本：換成自己的路線與題目；也可以直接存成 `data/tour.js` 沿用本專案 |

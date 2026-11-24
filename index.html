@@ -116,17 +116,9 @@
   #menu .jump { padding-left: 1.4rem; font-size: .95rem; }
   #menu hr { border: none; border-top: 1px solid #eadfce; margin: .3rem 0; }
 
-  /* 注音：國字右側直排 */
-  .zy { display: inline-flex; align-items: center; vertical-align: middle; margin-right: .04em; line-height: 1; }
-  .zy .h { display: inline-block; }
-  .zy .b { display: inline-flex; align-items: center; font-size: .36em; margin-left: .06em; position: relative; }
-  .zy .col { display: inline-flex; flex-direction: column; align-items: center; line-height: 1.02; }
-  .zy .col i { font-style: normal; display: block; }
-  .zy .col i.lt { line-height: .7; }
-  .zy .tn { display: inline-block; margin-left: .02em; transform: translateY(-.15em); }
-  .q, .opt, .why, .piece, .slot, .letter, .sortCard, .ccard, .bin, .look { line-height: 2.1; }
-  #goBtn .zy .b, #title .zy .b { font-size: .32em; }
-  body.nozy .zy .b { display: none; }
+  /* 注音：照 class-games，用注音字型（國字和注音是同一個字形，js/bpmf-font.js） */
+  .zyt { font-family: 'CW Bpmf', 'PingFang TC', serif; font-weight: 400; letter-spacing: .02em; }
+  .q, .opt, .why, .piece, .slot, .letter, .sortCard, .ccard, .bin, .look { line-height: 1.7; }
 
   .photo { height: 9rem; margin: -1.1rem -1.3rem .8rem; border-radius: 1.6rem 1.6rem 0 0; background: center / cover no-repeat; }
   .look { background: #fff6d6; border-radius: 1rem; padding: .4rem .9rem; margin-bottom: .8rem; font-size: 1.05rem; display: flex; gap: .5rem; align-items: center; }
@@ -239,7 +231,7 @@
 
   /* ===== 第 5 版：平板一頁看完（不需要上下滑） ===== */
   #card { align-items: center; padding: 1vh 1vw; }
-  #sheet { width: min(1000px, 98vw); height: min(760px, 96vh); max-height: none; border-radius: 22px; border: 3px solid var(--line);
+  #sheet { width: min(1000px, 98vw); height: auto; max-height: min(760px, 96vh); border-radius: 22px; border: 3px solid var(--line);
     display: flex; flex-direction: column; padding: .7rem 1.1rem .9rem; overflow: hidden; animation: popin .25s ease-out; box-shadow: 6px 6px 0 var(--line); }
   @keyframes popin { from { transform: scale(.94); opacity: .4; } }
   #sheet > div:last-child { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
@@ -249,7 +241,9 @@
   #sheetHead .big { width: 2.3rem; height: 2.3rem; }
   .look { margin-bottom: .4rem; padding: .1rem .8rem; font-size: .95rem; flex: none; }
   .tag { align-self: flex-start; margin-bottom: .25rem; }
-  .q { font-size: 1.22rem; margin: .1rem 0 .45rem; }
+  .q { font-size: 1.5rem; margin: .1rem 0 .6rem; }
+  .opt { font-size: 1.4rem; padding: .9rem 1.1rem; }
+  #sheetHead h2 { font-size: 1.5rem; }
   .opts { grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); gap: .55rem; }
   .opt { padding: .4rem .8rem; font-size: 1.18rem; }
   .why { margin-top: .5rem; padding: .3rem .8rem; font-size: 1.05rem; line-height: 1.95; }
@@ -303,7 +297,7 @@
   .chaseMsg .why { margin-top: .4rem; }
 
   @media (max-aspect-ratio: 1/1) {
-    #sheet { height: min(980px, 94vh); }
+    #sheet { max-height: min(980px, 94vh); }
     .host { width: 7rem; height: 7.7rem; }
   }
   /* 二上數學題型 */
@@ -483,6 +477,7 @@
 <script src="vendor/three.min.js"></script>
 <script src="data/tour.js"></script>
 <script src="js/zhuyin.js"></script>
+<script src="js/bpmf-font.js"></script>
 <script src="js/art.js"></script>
 <script src="js/game.js"></script>
 </body>
