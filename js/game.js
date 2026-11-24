@@ -88,17 +88,6 @@
     var d = new Date();
     return zhNum(d.getMonth() + 1) + "月" + zhNum(d.getDate()) + "日";
   }
-  function speak(text) {
-    if (!("speechSynthesis" in window)) return;
-    try {
-      speechSynthesis.cancel();
-      var clean = text.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}\u{20E3}]/gu, "");
-      var u = new SpeechSynthesisUtterance(clean);
-      u.lang = "zh-TW";
-      u.rate = 0.85;
-      speechSynthesis.speak(u);
-    } catch (e) {}
-  }
 
   /* ---------- 角色與圖示 ---------- */
   var ART = window.ART;
@@ -1242,12 +1231,12 @@
     cur = { k: k, step: 0, preview: true };
     $("card").classList.add("show");
     head();
-    var stn = ST[k], body = el("div", "tbody preview"), say = [];
+    var stn = ST[k], body = el("div", "tbody preview");
     sheet.appendChild(body);
     if (k === 0 && TOUR.rules) {
       body.appendChild(el("div", "step", zy("出發前，我們約好：")));
       var ol = el("ol", "rules");
-      TOUR.rules.forEach(function (r) { ol.appendChild(el("li", "", zy(r))); say.push(r); });
+      TOUR.rules.forEach(function (r) { ol.appendChild(el("li", "", zy(r))); });
       body.appendChild(ol);
       body.appendChild(el("div", "step", zy("今天要去的地方：")));
       var rl = el("div", "routeList");
@@ -1263,14 +1252,10 @@
         var line = taskSummary(t);
         if (!line) return;
         ul.appendChild(el("li", "", '<span class="tag ' + (t.subject || "生活") + '">' + zy(t.subject || "生活") + "</span><span>" + zy(line) + "</span>"));
-        say.push(line);
       });
       body.appendChild(ul);
     }
     var f = foot(body);
-    var sp = el("button", "next gray", zy("念給大家聽"));
-    sp.onclick = function () { speak((stn.lookFor ? stn.lookFor + "。" : "") + say.join("。")); };
-    f.appendChild(sp);
     var ok = el("button", "next", zy(k === 0 ? "約好了 ▶" : "看完了 ▶"));
     ok.onclick = function () {
       prog()[stn.id] = true;
@@ -1310,7 +1295,6 @@
   }
   function closeCard() {
     $("card").classList.remove("show");
-    try { speechSynthesis.cancel(); } catch (e) {}
     cur = null;
     refresh();
   }
@@ -1344,12 +1328,8 @@
       sheet.appendChild(lf);
     }
   }
-  function qLine(text, sayText) {
+  function qLine(text) {
     var d = el("div", "q");
-    var b = el("button", "speak", ART.speaker());
-    b.setAttribute("aria-label", "念給我聽");
-    b.onclick = function () { speak(sayText || text); };
-    d.appendChild(b);
     d.appendChild(el("span", "", zy(text)));
     return d;
   }
@@ -1406,8 +1386,7 @@
 
   function choiceBlock(body, q, options, answer, onRight, why) {
     var tries = 0;
-    var say = q + "。" + options.map(function (o, k) { return "第" + ZH[k + 1] + "個，" + o; }).join("。");
-    if (q) body.appendChild(qLine(q, say));
+    if (q) body.appendChild(qLine(q));
     var box_ = el("div", "opts");
     var msg = el("div");
     options.forEach(function (o, k) {
@@ -1459,7 +1438,7 @@
     return gs;
   }
   function taskMath(t, body) {
-    body.appendChild(qLine(t.story, t.story + t.ask));
+    body.appendChild(qLine(t.story));
     body.appendChild(groupPics(t.item, t.per, t.groups));
     var ans = t.per * t.groups;
     var area = el("div", "steparea");
@@ -1506,7 +1485,7 @@
 
   // 二位數加減應用題：先列式，再算答案，減法附驗算
   function taskWord(t, body) {
-    body.appendChild(qLine(t.story, t.story + t.ask));
+    body.appendChild(qLine(t.story));
     var ans = calc(t.a, t.op, t.b);
     var area = el("div", "steparea");
     body.appendChild(area);
@@ -1530,7 +1509,7 @@
   // 幾個百、幾個十、幾個一（200 以內的數）
   function taskPlace(t, body) {
     var n = t.h * 100 + t.t * 10 + t.o;
-    body.appendChild(qLine(t.story, t.story + t.ask));
+    body.appendChild(qLine(t.story));
     var pics = el("div", "placePics");
     [[t.h, "box100", "一" + t.box + "有一百" + t.unit], [t.t, "bag10", "一" + t.bag + "有十" + t.unit], [t.o, t.item, "一" + t.unit]].forEach(function (g) {
       if (!g[0]) return;
