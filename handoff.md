@@ -23,6 +23,10 @@
 - 完整版（數學、國語小遊戲、學生平板、明信片）留在 git 標籤 `v5-full`。
 
 ## 4. 下一步（等使用者回報）
+- **下次開工先做（使用者 2026-11-25 交代）**：
+  1. 運鏡：到站、走路、再走一次時鏡頭怎麼移動要調整（現在到站會用 `faceStation` 轉到建築正面，全圖是 `desiredCam` 的 overview）。開工時先問使用者想要的運鏡感覺。
+  2. 每個地點標題（站牌 Sprite）什麼時候顯示：現在一直顯示，全圖時很擠。開工時先問使用者想在什麼時候顯示。
+  3. 天母派出所的門口要面對圓環：現在自動朝向 at 那個路線點（正西），要改成朝向 `data/tour.js` 的 roundabout（可以用 `rot` 指定，或程式改成朝向圓環中心），改完檢查警車、機車、榕樹會不會壓到圓環和路。
 - iPad 實機：從相簿選照片、分享選單有沒有 LINE、iPadOS 16 能不能開（看左下角有沒有紅框）。
 - 教室大屏（BenQ RP8602K）：後排看不看得清楚卡片的字和照片。
 - 老師們看過後：每站的「說說看」「我們學到」文字要不要改；站的位置要不要調。
@@ -34,7 +38,9 @@
 - 停車場（還沒做，等使用者決定）：自動省電（降畫質）、社區人物彩蛋圖鑑、網址 #站名 直接開那一站、分享圖上的地點名稱放大、角色與畫面改得更像真實社區（見對話中的提案）。
 
 ## 5. 動過的檔案
-`index.html`、`js/game.js`、`data/tour.js`、`js/zhuyin.js`、`js/bpmf-font.js`（新）、`tools/build-bpmf-font.py`（新）、`tools/zhuyin-overrides.js`、`README.md`；刪除 `share/photos.json`。
+2026-11-25：`js/game.js`（郵局、派出所、消防分隊、圖書館、公園模型；圓環、額外道路、faceStation、站點 scale）、`data/tour.js`（路線、圓環、roads、站點位置）、`handoff.md`。
+
+更早：`index.html`、`js/game.js`、`data/tour.js`、`js/zhuyin.js`、`js/bpmf-font.js`（新）、`tools/build-bpmf-font.py`（新）、`tools/zhuyin-overrides.js`、`README.md`；刪除 `share/photos.json`。
 
 ## 6. 已做的決策／試過但行不通
 - 不做學生平板：學生沒有用平板的習慣，教操作的時間比學到的多。
