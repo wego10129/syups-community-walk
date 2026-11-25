@@ -854,7 +854,7 @@
     },
     // 臺北市立圖書館天母分館（中山北路七段 154 巷）：照實景照片（2026-11 使用者提供）。
     // 認得出來的特徵：長長的四層白色大樓、窗戶下面的黃色牆板、最上層的綠色遮雨棚、
-    // 左邊高高的切角塔樓（底下畫著樹和書的壁畫）、底下灰色石頭砌的擋土牆和藍色鐵捲門、
+    // 左邊高高的切角塔樓（直寫灰色大字「天母愛閱讀」，底下畫著樹和書的壁畫）、底下灰色石頭砌的擋土牆和藍色鐵捲門、
     // 樹籬前面淡藍白色的館名招牌、門口的小樹
     library: function (g) {
       var Z = -0.6, WHITE = 0xf1eee6;
@@ -874,6 +874,8 @@
       box(2.1, 0.15, 1.9, 0xd2cdc2, -3.3, 6.6, Z + 0.4, g);
       var mural = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.6), texMat(libraryMuralTex()));
       mural.position.set(-3.3, 1.8, Z + 0.4 + 0.935); g.add(mural);
+      var towerText = signMesh("天母愛閱讀", 0.8, 3.4, { bg: "#e4e0d6", fg: "#8d8a84", vertical: true }); // 塔樓上的灰色大字
+      towerText.position.set(-3.3, 4.75, Z + 0.4 + 0.935); g.add(towerText);
       // 樹籬、館名招牌、門口的小樹
       [[-1.6, 1.3], [0.2, 1.5], [1.9, 1.3]].forEach(function (p) { box(p[1] + 0.3, 0.7, 0.8, 0x4f9a55, p[0], 0.15, 1.75, g); });
       var lsign = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.9), texMat(librarySignTex()));
