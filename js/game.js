@@ -278,13 +278,22 @@
     }
     return { p: pts[pts.length - 1].clone(), d: new THREE.Vector3(1, 0, 0) };
   }
-  function distToRoute(x, z) {
-    var best = 1e9, P = new THREE.Vector3(x, 0, z);
-    for (var i = 1; i < pts.length; i++) {
-      var a = pts[i - 1], b = pts[i], ab = b.clone().sub(a);
-      var t = Math.max(0, Math.min(1, P.clone().sub(a).dot(ab) / ab.lengthSq()));
+  // 路線沒有走、但要畫出來的路（data/tour.js 的 roads）
+  var extraRoads = (TOUR.roads || []).map(function (line) { return line.map(function (p) { return new THREE.Vector3(p[0], 0, p[1]); }); });
+  function distToLine(line, P) {
+    var best = 1e9;
+    for (var i = 1; i < line.length; i++) {
+      var a = line[i - 1], b = line[i], ab = b.clone().sub(a);
+      var t = Math.max(0, Math.min(1, P.clone().sub(a).dot(ab) / (ab.lengthSq() || 1)));
       best = Math.min(best, a.clone().add(ab.multiplyScalar(t)).distanceTo(P));
     }
+    return best;
+  }
+  function distToRoute(x, z) {
+    var P = new THREE.Vector3(x, 0, z), best = distToLine(pts, P);
+    extraRoads.forEach(function (line) { best = Math.min(best, distToLine(line, P)); });
+    var RB = TOUR.roundabout;
+    if (RB) best = Math.min(best, Math.max(0, Math.hypot(x - RB.x, z - RB.z) - 2.3));
     return best;
   }
   // 是否在路線圍起來的中間區域
@@ -304,6 +313,31 @@
     seg.position.set((a.x + b.x) / 2, 0.05, (a.z + b.z) / 2);
     seg.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
     scene.add(seg);
+  }
+  // 額外的路：和路線一樣寬，沒有白色虛線
+  extraRoads.forEach(function (line) {
+    for (var j = 1; j < line.length; j++) {
+      var a = line[j - 1], b = line[j];
+      var seg = new THREE.Mesh(new THREE.BoxGeometry(a.distanceTo(b) + 1.3, 0.08, 2.6), roadMat);
+      seg.position.set((a.x + b.x) / 2, 0.05, (a.z + b.z) / 2);
+      seg.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+      scene.add(seg);
+    }
+  });
+  // 圓環：路面圓盤、中間的草地島、矮樹叢、紅白相間的路緣
+  if (TOUR.roundabout) {
+    var RB = TOUR.roundabout;
+    var ringRoad = new THREE.Mesh(new THREE.CylinderGeometry(RB.r + 2.1, RB.r + 2.1, 0.08, 40), roadMat);
+    ringRoad.position.set(RB.x, 0.05, RB.z);
+    scene.add(ringRoad);
+    cyl(RB.r + 0.12, RB.r + 0.12, 0.2, 0xe9e6df, RB.x, 0.04, RB.z, scene, 32);
+    cyl(RB.r, RB.r, 0.24, LOOK.lawn, RB.x, 0.04, RB.z, scene, 32);
+    for (var bq = 0; bq < 6; bq++) {
+      var ba = bq * Math.PI / 3;
+      var bush = ball(0.38, bq % 2 ? 0x4f9a55 : 0x5aa35f, RB.x + Math.cos(ba) * RB.r * 0.6, 0.4, RB.z + Math.sin(ba) * RB.r * 0.6);
+      bush.scale.y = 0.7;
+    }
+    var rbFlower = ball(0.3, 0xd86a8a, RB.x, 0.4, RB.z); rbFlower.scale.y = 0.6;
   }
   for (i = 0; i < pts.length; i++) {
     var jn = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.08, 18), roadMat);
@@ -1205,7 +1239,7 @@
   function cardOpen() { return $("card").classList.contains("show"); }
   function desiredCam() {
     var tgt, d = dist;
-    if (camMode === "overview") { tgt = new THREE.Vector3(-2, 0, 0); d = 82; }
+    if (camMode === "overview") { tgt = new THREE.Vector3(-2, 0, -4); d = 86; }
     else if (cardOpen() && !walking) {
       // 打開卡片時，鏡頭拉近到這一站的建築（照片在右邊，3D 在左邊，方便對照）
       var s = ST[state.at];
@@ -1401,9 +1435,16 @@
 
   /* ---------- 地點卡：照片在右邊，3D 在左邊 ---------- */
   var card = $("card"), sheet = $("sheet"), showIdx = 0;
+  // 到站時鏡頭轉到建築正面（建築照真實位置朝向馬路，有些背對預設鏡頭）
+  function faceStation(k) {
+    if (ST[k].noBuilding || !buildings[k]) return;
+    var want = buildings[k].rotation.y + 0.45;
+    yaw = want + Math.round((yaw - want) / (Math.PI * 2)) * Math.PI * 2; // 取最接近現在的角度，不要轉一大圈
+  }
   function openStation(k) {
     closeMenu();
     if (state.at !== k) state.at = k;
+    faceStation(k);
     state.visited[ST[k].id] = true;
     var stn = ST[k], list = photos[stn.id] || [], say = [stn.name];
     if (showIdx >= list.length) showIdx = 0;
