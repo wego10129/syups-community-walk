@@ -926,13 +926,79 @@
       ball(0.45, 0x9a9a92, 1.9, 0.2, 0.8, g);
       ball(0.35, 0xa8a69c, -1.9, 0.15, 1.0, g);
     },
+    // 天和公園（天母東路 69 巷旁）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：木屑鋪的遊戲場、深色木頭的遊戲塔（斜斜的屋頂、紅色牆板、爬梯）、
+    // 從塔上溜下來的不鏽鋼滑梯（上段是管子）、灰色拱架吊著的紅色攀爬網、
+    // 石頭柱子的長涼亭和木頭長椅、矮樹叢、大樹
     park: function (g) {
-      for (var a = -1; a <= 1; a += 2) for (var b = -1; b <= 1; b += 2) cyl(0.12, 0.12, 2.2, 0xa0522d, a * 1.3, 0, b * 1.3, g, 6);
-      pyramid(2.6, 1.5, 0xc95a49, 2.2, g);
-      box(1.6, 0.4, 0.8, 0x8a6142, 0, 0.4, 0, g);
-      box(0.8, 1.6, 0.8, 0xf6c445, 0, 0, -4.5, g);
-      var sl = box(0.8, 0.12, 2.6, 0x4a7fc1, 0, 0.8, -3.2, g);
-      sl.rotation.x = 0.55;
+      var WOOD = 0x6b4a32, STEEL = 0xc9ced3;
+      // 木屑地面和水泥路緣
+      var chips = cyl(3.6, 3.6, 0.08, 0xa0704a, 0, 0.02, 0, g, 36);
+      chips.scale.z = 0.8;
+      var curb = cyl(3.75, 3.75, 0.06, 0xd9d5cb, 0, 0.0, 0, g, 36);
+      curb.scale.z = 0.8;
+      // 遊戲塔：四根木柱、平台、木板牆、斜屋頂、紅色牆板、爬梯
+      var TX = 0.3, TZ = -0.4;
+      [[-0.55, -0.55], [-0.55, 0.55], [0.55, -0.55], [0.55, 0.55]].forEach(function (c) { box(0.14, 2.7, 0.14, WOOD, TX + c[0], 0, TZ + c[1], g); });
+      box(1.2, 0.12, 1.2, WOOD, TX, 1.15, TZ, g);
+      box(1.2, 0.75, 0.08, 0x7a5638, TX, 1.3, TZ - 0.58, g);
+      box(0.08, 0.75, 1.2, 0x7a5638, TX - 0.58, 1.3, TZ, g);
+      for (var sl = -0.45; sl <= 0.45; sl += 0.18) box(0.06, 0.7, 0.04, 0x7a5638, TX + sl, 1.3, TZ + 0.58, g); // 前面的欄杆
+      var troof = box(1.6, 0.08, 1.5, 0x55595d, TX, 2.75, TZ, g);
+      troof.rotation.x = 0.35;
+      box(0.9, 0.55, 0.06, 0xd8392b, TX - 0.2, 1.95, TZ - 0.62, g); // 紅色牆板
+      for (var st = 0; st < 4; st++) box(0.7, 0.06, 0.25, WOOD, TX - 0.1, 0.25 + st * 0.28, TZ + 0.75 + (3 - st) * 0.2, g); // 爬梯
+      // 不鏽鋼滑梯：從塔上往右前方溜下來，上段是管子
+      function along(mesh, S, E) {
+        var dx = E[0] - S[0], dy = E[1] - S[1], dz = E[2] - S[2], h = Math.hypot(dx, dz);
+        mesh.position.set((S[0] + E[0]) / 2, (S[1] + E[1]) / 2, (S[2] + E[2]) / 2);
+        mesh.rotation.order = "YXZ";
+        mesh.rotation.y = Math.atan2(dx, dz);
+        mesh.rotation.x = Math.atan2(-dy, h);
+        g.add(mesh);
+        return Math.hypot(h, dy);
+      }
+      var S = [TX + 0.6, 1.75, TZ + 0.2], M = [TX + 1.3, 1.2, TZ + 0.9], E = [TX + 2.6, 0.25, TZ + 2.4];
+      var tubeGeo = new THREE.CylinderGeometry(0.3, 0.3, 1, 14, 1, true); tubeGeo.rotateX(Math.PI / 2);
+      var tube = new THREE.Mesh(tubeGeo, new THREE.MeshStandardMaterial({ color: STEEL, roughness: 0.35, metalness: 0.4, side: THREE.DoubleSide }));
+      tube.scale.z = along(tube, S, M);
+      var chute = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.05, 1), new THREE.MeshStandardMaterial({ color: STEEL, roughness: 0.35, metalness: 0.4 }));
+      chute.scale.z = along(chute, M, E);
+      [-0.3, 0.3].forEach(function (off) {
+        var rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 1), mat(STEEL));
+        var c = Math.cos(chute.rotation.y), sn = Math.sin(chute.rotation.y);
+        rail.scale.z = along(rail, [M[0] + off * c, M[1] + 0.1, M[2] - off * sn], [E[0] + off * c, E[1] + 0.1, E[2] - off * sn]);
+      });
+      var endPad = box(0.6, 0.05, 0.6, STEEL, E[0] + 0.25, 0.22, E[2] + 0.3, g);
+      endPad.rotation.y = chute.rotation.y;
+      box(0.6, 0.06, 0.06, 0xd8392b, E[0] + 0.35, 0.2, E[2] + 0.55, g).rotation.y = chute.rotation.y; // 滑梯尾端的紅線
+      // 攀爬網：灰色拱架＋紅色繩網
+      var arch = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.07, 8, 24, Math.PI), mat(0xa0a6ad));
+      arch.position.set(-2.0, 0, -0.2); arch.rotation.y = 0.5; g.add(arch);
+      var net = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xb0484a, wireframe: true }));
+      net.position.set(-2.0, 0.05, -0.2); net.scale.y = 0.85; g.add(net);
+      // 長涼亭：深色平屋頂、淺色屋簷、石頭柱子、木頭長椅
+      var PX = 1.0, PZ = -3.3;
+      [-2.2, 0, 2.2].forEach(function (x) {
+        [-0.6, 0.6].forEach(function (z) {
+          box(0.32, 1.7, 0.32, 0x9b9690, PX + x, 0, PZ + z, g);
+          for (var k = 0; k < 4; k++) box(0.34, 0.04, 0.34, 0x7d7873, PX + x, 0.3 + k * 0.4, PZ + z, g);
+        });
+      });
+      box(5.4, 0.1, 1.9, 0xe9e4da, PX, 1.7, PZ, g);
+      box(5.6, 0.14, 2.1, 0x5a4636, PX, 1.8, PZ, g);
+      box(0.25, 0.35, 0.04, 0xc0392b, PX + 2.2, 1.0, PZ + 0.78, g); // 柱子上的小紅牌
+      [-1.1, 1.1].forEach(function (x) {
+        box(1.2, 0.08, 0.4, 0x5a3e2a, PX + x, 0.4, PZ - 0.1, g);
+        box(1.2, 0.4, 0.06, 0x5a3e2a, PX + x, 0.48, PZ - 0.3, g);
+        box(0.06, 0.4, 0.35, 0x333333, PX + x - 0.5, 0, PZ - 0.1, g);
+        box(0.06, 0.4, 0.35, 0x333333, PX + x + 0.5, 0, PZ - 0.1, g);
+      });
+      // 矮樹叢和大樹
+      box(2.0, 0.55, 0.6, 0x4f9a55, -2.4, 0, 2.1, g);
+      box(1.4, 0.5, 0.6, 0x5aa35f, 3.9, 0, -1.4, g);
+      banyan(-3.9, -2.6, 1.0, g);
+      banyan(4.4, 1.6, 0.9, g);
     }
   };
 
@@ -976,7 +1042,7 @@
     g.position.set(stn.pos[0], 0, stn.pos[1]);
     var near = pts[stn.at];
     g.rotation.y = stn.rot != null ? stn.rot : Math.atan2(near.x - stn.pos[0], near.z - stn.pos[1]);
-    if (!stn.noBuilding && BUILD[stn.kind]) { BUILD[stn.kind](g); if (stn.kind !== "school") g.scale.setScalar(1.15); }
+    if (!stn.noBuilding && BUILD[stn.kind]) { BUILD[stn.kind](g); if (stn.kind !== "school") g.scale.setScalar(stn.scale || 1.15); }
     scene.add(g);
     buildings[k] = g;
     g.traverse(function (o) { if (o.isMesh) { o.userData.station = k; pickables.push(o); } });
