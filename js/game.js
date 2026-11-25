@@ -396,6 +396,153 @@
     return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, roughness: LOOK.rough, metalness: 0 }));
   }
 
+  // canvas 畫成貼圖（facade、招牌、徽章共用）
+  function canvasTex(w, h, draw) {
+    var cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    draw(cv.getContext("2d"), w, h);
+    var t = new THREE.CanvasTexture(cv);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+  function texMat(t) { return new THREE.MeshStandardMaterial({ map: t, roughness: LOOK.rough, metalness: 0 }); }
+  // 有貼圖正面的方塊：面的順序是 右、左、上、下、前、後
+  function faceBox(w, h, d, faces, x, y, z, parent) {
+    var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), faces);
+    m.position.set(x || 0, (y || 0) + h / 2, z || 0);
+    parent.add(m);
+    return m;
+  }
+  // 行道樹（榕樹）：粗樹幹、扁扁的大樹冠。不用亂數，才不會讓地圖上其他樹換位置
+  function banyan(x, z, sc, parent) {
+    var g = new THREE.Group();
+    cyl(0.24 * sc, 0.36 * sc, 1.7 * sc, 0x7a6a58, 0, 0, 0, g, 7);
+    [[0, 2.5, 0, 1.25, 0x4f8f4a], [0.95, 2.15, 0.25, 0.95, 0x5c9c55], [-0.85, 2.25, -0.2, 0.95, 0x5aa35f], [0.15, 2.2, 0.85, 0.85, 0x6cb565]].forEach(function (c) {
+      var m = new THREE.Mesh(new THREE.IcosahedronGeometry(c[3] * sc, 0), leafMat(c[4]));
+      m.scale.y = 0.75;
+      m.rotation.y = c[0] * 2 + c[2];
+      m.position.set(c[0] * sc, c[1] * sc, c[2] * sc);
+      g.add(m);
+    });
+    g.position.set(x, 0, z);
+    parent.add(g);
+    return g;
+  }
+  function wheel(r, x, y, z, parent) {
+    var w = cyl(r, r, 0.16, 0x2b2b2b, 0, 0, 0, parent, 14);
+    w.position.set(x, y, z);
+    w.rotation.x = Math.PI / 2;
+    return w;
+  }
+  // 機車：車身沿著 z 方向（車頭朝 +z）
+  function scooter(color, x, z, rot, parent) {
+    var g = new THREE.Group();
+    box(0.3, 0.3, 1.0, color, 0, 0.18, 0, g);
+    box(0.32, 0.12, 0.5, 0x2b2b2b, 0, 0.48, -0.2, g); // 座墊
+    box(0.3, 0.55, 0.14, color, 0, 0.18, 0.42, g); // 前擋
+    box(0.6, 0.05, 0.05, 0x444444, 0, 0.78, 0.45, g); // 把手
+    [-0.38, 0.4].forEach(function (wz) { var w = wheel(0.17, 0, 0.17, wz, g); w.rotation.set(0, 0, Math.PI / 2); });
+    g.position.set(x, 0, z); g.rotation.y = rot || 0;
+    parent.add(g);
+    return g;
+  }
+  // 警車：白色車身、深藍色腰線、車頂紅藍警示燈（車身沿著 x 方向）
+  function patrolCar(x, z, rot, parent) {
+    var g = new THREE.Group();
+    box(2.0, 0.5, 0.95, 0xf4f6f8, 0, 0.18, 0, g);
+    box(2.02, 0.16, 0.97, 0x23407a, 0, 0.3, 0, g); // 深藍腰線
+    box(0.55, 0.06, 0.9, 0x23407a, 0.72, 0.66, 0, g); // 引擎蓋上的藍色
+    box(1.15, 0.42, 0.85, 0x3f4f5e, -0.15, 0.66, 0, g); // 車窗
+    box(1.1, 0.06, 0.82, 0xf4f6f8, -0.15, 1.08, 0, g); // 車頂
+    box(0.22, 0.12, 0.3, 0xe2382b, -0.15, 1.14, -0.17, g); // 警示燈
+    box(0.22, 0.12, 0.3, 0x2f6fe0, -0.15, 1.14, 0.17, g);
+    [[-0.65, -0.45], [-0.65, 0.45], [0.65, -0.45], [0.65, 0.45]].forEach(function (p) { wheel(0.2, p[0], 0.2, p[1], g); });
+    g.position.set(x, 0, z); g.rotation.y = rot || 0;
+    parent.add(g);
+    return g;
+  }
+  // 郵筒：長方形筒身、圓弧頂、投信口（臺灣的郵筒：綠色寄平信、紅色寄限時和航空）
+  function mailbox(color, x, z, parent) {
+    box(0.46, 0.22, 0.4, 0x5a5f63, x, 0, z, parent);
+    box(0.62, 0.8, 0.5, color, x, 0.22, z, parent);
+    var top = cyl(0.25, 0.25, 0.62, color, x, 0.77, z, parent, 16);
+    top.rotation.z = Math.PI / 2;
+    box(0.36, 0.05, 0.03, 0x1e1e1e, x, 0.84, z + 0.26, parent); // 投信口
+    box(0.36, 0.2, 0.02, 0xffffff, x, 0.5, z + 0.26, parent); // 白色標示
+  }
+  // 中華郵政的招牌：綠底、左邊紅色郵徽、白字「郵局 POST」、右邊紅白藍斜條
+  function postSignTex() {
+    return canvasTex(1024, 112, function (c, W, H) {
+      c.fillStyle = "#13a04b"; c.fillRect(0, 0, W, H);
+      c.fillStyle = "#ffffff"; c.beginPath(); c.arc(70, 56, 40, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#d8262b"; c.beginPath(); c.arc(70, 56, 34, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#ffffff";
+      c.fillRect(48, 36, 44, 7); c.fillRect(48, 52, 44, 7); c.fillRect(48, 68, 44, 7); c.fillRect(66, 28, 8, 56);
+      c.textBaseline = "middle"; c.textAlign = "left";
+      c.font = "bold 76px " + FONT; c.fillText("郵 局", 130, 60);
+      c.font = "bold 70px " + FONT; c.fillText("POST", 470, 60);
+      [["#d8262b", 0], ["#ffffff", 26], ["#2b2f6b", 52]].forEach(function (b) {
+        c.fillStyle = b[0]; c.beginPath();
+        c.moveTo(860 + b[1], H); c.lineTo(930 + b[1], 0); c.lineTo(952 + b[1], 0); c.lineTo(882 + b[1], H); c.fill();
+      });
+    });
+  }
+  // 郵局樓上的立面：米色磁磚、每層三扇窗、白色鐵窗
+  function postFacadeTex() {
+    return canvasTex(640, 330, function (c, W, H) {
+      c.fillStyle = "#d9cbb0"; c.fillRect(0, 0, W, H);
+      for (var f = 0; f < 3; f++) {
+        var y = 74 + f * 86;
+        c.fillStyle = "#c2b293"; c.fillRect(0, y + 74, W, 8);
+        [30, 240, 450].forEach(function (x) {
+          c.fillStyle = "#6b6f72"; c.fillRect(x, y + 8, 160, 58);
+          c.fillStyle = "#86a0ae"; c.fillRect(x + 5, y + 13, 150, 48);
+          c.fillStyle = "#eeeeea";
+          for (var b = x + 5; b < x + 160; b += 15) c.fillRect(b, y + 8, 3, 58);
+          c.fillRect(x, y + 34, 160, 3);
+        });
+      }
+    });
+  }
+  // 派出所的立面：淺灰色格子框、紅色牆板、白框深色窗、窗下的冷氣
+  function policeFacadeTex(cols, cross) {
+    var CW = 130, RH = 90;
+    return canvasTex(cols * CW, 4 * RH, function (c, W, H) {
+      c.fillStyle = "#d2cfc9"; c.fillRect(0, 0, W, H);
+      for (var r = 0; r < 4; r++) for (var k = 0; k < cols; k++) {
+        var x = k * CW + 9, y = r * RH + 8, w = CW - 18, h = RH - 16;
+        c.fillStyle = "#b4473c"; c.fillRect(x, y, w, h);
+        if (cross && r === 3 && k === 1) {
+          // 二樓那一格的木頭 X 裝飾
+          c.fillStyle = "#e4d4b6"; c.fillRect(x, y, w, h);
+          c.strokeStyle = "#8a5a3c"; c.lineWidth = 12;
+          c.strokeRect(x + 6, y + 6, w - 12, h - 12);
+          c.beginPath(); c.moveTo(x + 8, y + 8); c.lineTo(x + w - 8, y + h - 8); c.moveTo(x + w - 8, y + 8); c.lineTo(x + 8, y + h - 8); c.stroke();
+          continue;
+        }
+        c.fillStyle = "#f2f2ee"; c.fillRect(x + 14, y + 6, w - 28, h - 30);
+        c.fillStyle = "#566573"; c.fillRect(x + 19, y + 11, w - 38, h - 40);
+        c.fillStyle = "#f2f2ee"; c.fillRect(x + w / 2 - 2, y + 11, 4, h - 40);
+        c.fillStyle = "#e9e9e4"; c.fillRect(x + w - 48, y + h - 21, 34, 18); // 冷氣
+        c.fillStyle = "#b9b9b3"; c.fillRect(x + w - 44, y + h - 17, 26, 3);
+      }
+    });
+  }
+  // 派出所的圓形徽章招牌
+  function policeBadgeTex() {
+    return canvasTex(256, 256, function (c) {
+      [["#263f7d", 124], ["#ffffff", 104], ["#c8372d", 90], ["#263f7d", 58]].forEach(function (r) {
+        c.fillStyle = r[0]; c.beginPath(); c.arc(128, 128, r[1], 0, Math.PI * 2); c.fill();
+      });
+      c.fillStyle = "#f2c14e";
+      for (var i = 0; i < 5; i++) {
+        var a = i * Math.PI * 2 / 5 - Math.PI / 2;
+        c.beginPath(); c.arc(128 + Math.cos(a) * 24, 128 + Math.sin(a) * 24, 17, 0, Math.PI * 2); c.fill();
+      }
+      c.fillStyle = "#ffffff"; c.beginPath(); c.arc(128, 128, 12, 0, Math.PI * 2); c.fill();
+    });
+  }
+
   var BUILD = {
     // 三玉國小：依空拍圖配置（南邊是校門，往北依序是前棟、長廊棟、中庭、操場）
     school: function (g) {
@@ -534,25 +681,77 @@
       box(1.4, 0.5, 0.6, 0x4f9a55, -1.9, 0.3, 2.9, g);
       tree(3.0, 2.4, 0.6, g);
     },
+    // 天母郵局（中山北路七段 130 號）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：米色老公寓的一樓、綠色「郵局 POST」長招牌（左邊紅色郵徽、右邊紅白藍斜條）、
+    // 深褐色磁磚的騎樓柱子、玻璃門和提款機、門口一綠一紅兩個郵筒、樓上的白色鐵窗和冷氣、行道樹和機車
     post: function (g) {
-      box(5, 3, 3.6, 0xeff0e6, 0, 0, 0, g);
-      box(5.2, 0.6, 3.8, 0x2f8a4f, 0, 3, 0, g);
-      box(4.4, 0.5, 0.1, 0x2f8a4f, 0, 2.2, 1.82, g);
-      box(2, 1.6, 0.1, 0x9fc6de, 0, 0, 1.82, g);
-      cyl(0.32, 0.32, 1.2, 0xd8392b, 2.9, 0, 2.6, g);
-      cyl(0.32, 0.32, 1.2, 0x2f8a4f, 3.7, 0, 2.6, g);
+      var BEIGE = 0xd9cbb0, PILLAR = 0x6e3b33;
+      box(7.6, 0.2, 5.4, 0xc9c6bf, 0, 0, 0.2, g); // 騎樓和人行道
+      // 一樓店面（往內縮，前面是騎樓）
+      box(6.2, 1.3, 2.4, 0xe9e6df, 0, 0.2, -1.2, g);
+      box(3.4, 1.05, 0.06, 0x9fc6de, 0.6, 0.2, 0.02, g); // 玻璃門窗
+      box(0.06, 1.05, 0.08, 0xd9d9d9, 0.6, 0.2, 0.06, g);
+      box(0.75, 1.1, 0.25, 0xd9dcdf, -1.75, 0.2, 0.1, g); // 提款機
+      box(0.75, 0.18, 0.27, 0x13a04b, -1.75, 1.12, 0.1, g);
+      box(0.45, 0.3, 0.04, 0x2f4858, -1.75, 0.72, 0.24, g);
+      // 樓上（伸出來蓋住騎樓）
+      var side = mat(BEIGE);
+      faceBox(6.4, 3.3, 3.4, [side, side, mat(0xcfc3aa), mat(0xe4ddd0), texMat(postFacadeTex()), side], 0, 1.5, -0.6, g);
+      box(6.5, 0.22, 3.5, 0xc2b293, 0, 4.8, -0.6, g); // 女兒牆
+      box(1.3, 0.6, 1.0, 0xcfc3aa, -1.8, 5.0, -1.2, g); // 樓梯間
+      cyl(0.32, 0.32, 0.5, 0x8fa3b0, 1.6, 5.0, -1.4, g, 12); // 水塔
+      [[-2.2, 2.35], [1.0, 3.2], [2.3, 4.05]].forEach(function (p) { box(0.5, 0.3, 0.25, 0xeeeeea, p[0], p[1], 1.25, g); });
+      // 騎樓柱子
+      [-2.95, 0, 2.95].forEach(function (x) { box(0.42, 1.5, 0.42, PILLAR, x, 0.2, 0.85, g); });
+      // 綠色長招牌
+      var sign = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 0.7), texMat(postSignTex()));
+      sign.position.set(0, 2.05, 1.12); g.add(sign);
+      box(6.4, 0.06, 0.12, 0xf2f2ee, 0, 2.4, 1.08, g);
+      // 門口的郵筒（「找找看」要找的東西）
+      mailbox(0x2e9a4f, 0.55, 2.4, g);
+      mailbox(0xd8392b, 1.4, 2.4, g);
+      // 機車和行道樹
+      scooter(0x3b4a6b, -2.3, 2.2, 0, g);
+      scooter(0xe9e6df, -1.4, 2.2, 0.1, g);
+      banyan(-3.7, 2.5, 0.85, g);
+      banyan(4.1, 2.5, 0.85, g);
     },
+    // 天母派出所（中山北路七段，路口轉角）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：五層樓、淺灰色格子框配紅色牆板、二樓一格木頭 X 裝飾、圓形警察徽章招牌、
+    // 門口上方的金色老鷹警徽、藍框玻璃門和台階、門口停著警車和警用機車、灰色矮牆、旁邊的大榕樹
     police: function (g) {
-      box(5, 3.4, 3.6, 0xf3f5f8, 0, 0, 0, g);
-      box(5.05, 0.6, 3.65, 0x2f5fa8, 0, 2.2, 0, g);
-      box(1.4, 1.7, 0.1, 0x6d8fb7, 0, 0, 1.82, g);
-      box(0.5, 0.35, 0.5, 0xe2382b, -0.4, 3.4, 0, g);
-      box(0.5, 0.35, 0.5, 0x2f6fe0, 0.4, 3.4, 0, g);
-      for (var k = 0; k < 3; k++) {
-        box(1.1, 0.5, 0.35, 0xffffff, -1.6 + k * 1.6, 0.3, 2.7, g);
-        ball(0.25, 0x333333, -2.05 + k * 1.6, 0.25, 2.7, g);
-        ball(0.25, 0x333333, -1.15 + k * 1.6, 0.25, 2.7, g);
-      }
+      var Z = -0.9; // 房子往後退一點，前面才停得下警車
+      // 一樓：灰色石材
+      box(5.0, 1.4, 3.8, 0xb9b6b0, 0, 0, Z, g);
+      box(1.5, 1.0, 0.06, 0x3a4650, 0.7, 0.2, Z + 1.92, g); // 玻璃門
+      box(0.18, 1.3, 0.12, 0x2f5fa8, -0.15, 0, Z + 1.94, g); // 藍色門框
+      box(0.18, 1.3, 0.12, 0x2f5fa8, 1.55, 0, Z + 1.94, g);
+      box(1.9, 0.18, 0.35, 0x4a3a32, 0.7, 1.22, Z + 2.0, g); // 門上的深色雨遮
+      box(2.0, 0.1, 0.5, 0xc9c6bf, 0.7, 0, Z + 2.15, g); // 台階
+      box(2.0, 0.1, 0.3, 0xc9c6bf, 0.7, 0.1, Z + 2.05, g);
+      box(1.2, 0.8, 0.06, 0x8a97a3, -1.6, 0.4, Z + 1.92, g); // 左邊窗戶
+      // 二樓到五樓：灰框紅牆
+      var front = texMat(policeFacadeTex(4, true)), sideT = texMat(policeFacadeTex(3, false));
+      faceBox(5.2, 3.6, 4.0, [sideT, sideT, mat(0xc9c6c0), mat(0xc9c6c0), front, sideT], 0, 1.4, Z, g);
+      box(5.3, 0.2, 4.1, 0xc9c6c0, 0, 5.0, Z, g); // 女兒牆
+      box(1.4, 0.7, 1.2, 0xd2cfc9, -1.2, 5.2, Z - 0.6, g); // 樓梯間
+      cyl(0.03, 0.03, 1.4, 0x777777, 1.6, 5.2, Z - 0.8, g, 5); // 天線
+      box(0.7, 0.04, 0.04, 0x777777, 1.6, 6.2, Z - 0.8, g);
+      // 金色老鷹警徽
+      ball(0.16, 0xe8b83a, 0.7, 1.62, Z + 2.04, g);
+      [-1, 1].forEach(function (sx) {
+        var wing = box(0.42, 0.14, 0.05, 0xe8b83a, 0.7 + sx * 0.28, 1.58, Z + 2.03, g);
+        wing.rotation.z = sx * 0.35;
+      });
+      // 圓形徽章招牌（掛在右邊轉角）
+      var badge = new THREE.Mesh(new THREE.CircleGeometry(0.45, 28), texMat(policeBadgeTex()));
+      badge.position.set(2.1, 2.0, Z + 2.12); g.add(badge);
+      box(0.1, 0.5, 0.08, 0x666666, 2.1, 2.0, Z + 2.04, g);
+      // 灰色矮牆、警車、警用機車、大榕樹
+      box(2.0, 0.55, 0.18, 0xa9a8a3, -1.6, 0, Z + 2.35, g);
+      patrolCar(-1.4, 2.0, 0, g);
+      scooter(0xf4f6f8, 2.0, 1.6, 0, g);
+      banyan(3.7, -1.6, 1.15, g);
     },
     fire: function (g) {
       box(6, 3.8, 4, 0xd8473a, 0, 0, 0, g);
