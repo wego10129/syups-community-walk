@@ -88,7 +88,7 @@ window.TOUR = {
       lookFor: "消防車停在哪裡？車子是什麼顏色？",
       talk: "消防員除了救火，還會做哪些事？",
       learn: "發生火災，或是有人需要救護車，要打一一九。" },
-    { id: "library", name: "圖書館天母分館", kind: "library", at: 15, pos: [1.5, -16.5],
+    { id: "library", name: "圖書館天母分館", kind: "library", at: 15, pos: [1.5, -16.5], rot: -0.4,
       lookFor: "圖書館外面有沒有還書箱？",
       talk: "如果可以在圖書館借一本書，你想借什麼書？",
       learn: "圖書館可以借書、看書，要輕聲說話，愛惜書本。" },
