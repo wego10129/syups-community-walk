@@ -278,13 +278,22 @@
     }
     return { p: pts[pts.length - 1].clone(), d: new THREE.Vector3(1, 0, 0) };
   }
-  function distToRoute(x, z) {
-    var best = 1e9, P = new THREE.Vector3(x, 0, z);
-    for (var i = 1; i < pts.length; i++) {
-      var a = pts[i - 1], b = pts[i], ab = b.clone().sub(a);
-      var t = Math.max(0, Math.min(1, P.clone().sub(a).dot(ab) / ab.lengthSq()));
+  // 路線沒有走、但要畫出來的路（data/tour.js 的 roads）
+  var extraRoads = (TOUR.roads || []).map(function (line) { return line.map(function (p) { return new THREE.Vector3(p[0], 0, p[1]); }); });
+  function distToLine(line, P) {
+    var best = 1e9;
+    for (var i = 1; i < line.length; i++) {
+      var a = line[i - 1], b = line[i], ab = b.clone().sub(a);
+      var t = Math.max(0, Math.min(1, P.clone().sub(a).dot(ab) / (ab.lengthSq() || 1)));
       best = Math.min(best, a.clone().add(ab.multiplyScalar(t)).distanceTo(P));
     }
+    return best;
+  }
+  function distToRoute(x, z) {
+    var P = new THREE.Vector3(x, 0, z), best = distToLine(pts, P);
+    extraRoads.forEach(function (line) { best = Math.min(best, distToLine(line, P)); });
+    var RB = TOUR.roundabout;
+    if (RB) best = Math.min(best, Math.max(0, Math.hypot(x - RB.x, z - RB.z) - 2.3));
     return best;
   }
   // 是否在路線圍起來的中間區域
@@ -304,6 +313,31 @@
     seg.position.set((a.x + b.x) / 2, 0.05, (a.z + b.z) / 2);
     seg.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
     scene.add(seg);
+  }
+  // 額外的路：和路線一樣寬，沒有白色虛線
+  extraRoads.forEach(function (line) {
+    for (var j = 1; j < line.length; j++) {
+      var a = line[j - 1], b = line[j];
+      var seg = new THREE.Mesh(new THREE.BoxGeometry(a.distanceTo(b) + 1.3, 0.08, 2.6), roadMat);
+      seg.position.set((a.x + b.x) / 2, 0.05, (a.z + b.z) / 2);
+      seg.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+      scene.add(seg);
+    }
+  });
+  // 圓環：路面圓盤、中間的草地島、矮樹叢、紅白相間的路緣
+  if (TOUR.roundabout) {
+    var RB = TOUR.roundabout;
+    var ringRoad = new THREE.Mesh(new THREE.CylinderGeometry(RB.r + 2.1, RB.r + 2.1, 0.08, 40), roadMat);
+    ringRoad.position.set(RB.x, 0.05, RB.z);
+    scene.add(ringRoad);
+    cyl(RB.r + 0.12, RB.r + 0.12, 0.2, 0xe9e6df, RB.x, 0.04, RB.z, scene, 32);
+    cyl(RB.r, RB.r, 0.24, LOOK.lawn, RB.x, 0.04, RB.z, scene, 32);
+    for (var bq = 0; bq < 6; bq++) {
+      var ba = bq * Math.PI / 3;
+      var bush = ball(0.38, bq % 2 ? 0x4f9a55 : 0x5aa35f, RB.x + Math.cos(ba) * RB.r * 0.6, 0.4, RB.z + Math.sin(ba) * RB.r * 0.6);
+      bush.scale.y = 0.7;
+    }
+    var rbFlower = ball(0.3, 0xd86a8a, RB.x, 0.4, RB.z); rbFlower.scale.y = 0.6;
   }
   for (i = 0; i < pts.length; i++) {
     var jn = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.3, 0.08, 18), roadMat);
@@ -394,6 +428,210 @@
     var t = new THREE.CanvasTexture(cv);
     t.encoding = THREE.sRGBEncoding;
     return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: t, roughness: LOOK.rough, metalness: 0 }));
+  }
+
+  // canvas 畫成貼圖（facade、招牌、徽章共用）
+  function canvasTex(w, h, draw) {
+    var cv = document.createElement("canvas");
+    cv.width = w; cv.height = h;
+    draw(cv.getContext("2d"), w, h);
+    var t = new THREE.CanvasTexture(cv);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+  function texMat(t) { return new THREE.MeshStandardMaterial({ map: t, roughness: LOOK.rough, metalness: 0 }); }
+  // 有貼圖正面的方塊：面的順序是 右、左、上、下、前、後
+  function faceBox(w, h, d, faces, x, y, z, parent) {
+    var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), faces);
+    m.position.set(x || 0, (y || 0) + h / 2, z || 0);
+    parent.add(m);
+    return m;
+  }
+  // 行道樹（榕樹）：粗樹幹、扁扁的大樹冠。不用亂數，才不會讓地圖上其他樹換位置
+  function banyan(x, z, sc, parent) {
+    var g = new THREE.Group();
+    cyl(0.24 * sc, 0.36 * sc, 1.7 * sc, 0x7a6a58, 0, 0, 0, g, 7);
+    [[0, 2.5, 0, 1.25, 0x4f8f4a], [0.95, 2.15, 0.25, 0.95, 0x5c9c55], [-0.85, 2.25, -0.2, 0.95, 0x5aa35f], [0.15, 2.2, 0.85, 0.85, 0x6cb565]].forEach(function (c) {
+      var m = new THREE.Mesh(new THREE.IcosahedronGeometry(c[3] * sc, 0), leafMat(c[4]));
+      m.scale.y = 0.75;
+      m.rotation.y = c[0] * 2 + c[2];
+      m.position.set(c[0] * sc, c[1] * sc, c[2] * sc);
+      g.add(m);
+    });
+    g.position.set(x, 0, z);
+    parent.add(g);
+    return g;
+  }
+  function wheel(r, x, y, z, parent) {
+    var w = cyl(r, r, 0.16, 0x2b2b2b, 0, 0, 0, parent, 14);
+    w.position.set(x, y, z);
+    w.rotation.x = Math.PI / 2;
+    return w;
+  }
+  // 機車：車身沿著 z 方向（車頭朝 +z）
+  function scooter(color, x, z, rot, parent) {
+    var g = new THREE.Group();
+    box(0.3, 0.3, 1.0, color, 0, 0.18, 0, g);
+    box(0.32, 0.12, 0.5, 0x2b2b2b, 0, 0.48, -0.2, g); // 座墊
+    box(0.3, 0.55, 0.14, color, 0, 0.18, 0.42, g); // 前擋
+    box(0.6, 0.05, 0.05, 0x444444, 0, 0.78, 0.45, g); // 把手
+    [-0.38, 0.4].forEach(function (wz) { var w = wheel(0.17, 0, 0.17, wz, g); w.rotation.set(0, 0, Math.PI / 2); });
+    g.position.set(x, 0, z); g.rotation.y = rot || 0;
+    parent.add(g);
+    return g;
+  }
+  // 警車：白色車身、深藍色腰線、車頂紅藍警示燈（車身沿著 x 方向）
+  function patrolCar(x, z, rot, parent) {
+    var g = new THREE.Group();
+    box(2.0, 0.5, 0.95, 0xf4f6f8, 0, 0.18, 0, g);
+    box(2.02, 0.16, 0.97, 0x23407a, 0, 0.3, 0, g); // 深藍腰線
+    box(0.55, 0.06, 0.9, 0x23407a, 0.72, 0.66, 0, g); // 引擎蓋上的藍色
+    box(1.15, 0.42, 0.85, 0x3f4f5e, -0.15, 0.66, 0, g); // 車窗
+    box(1.1, 0.06, 0.82, 0xf4f6f8, -0.15, 1.08, 0, g); // 車頂
+    box(0.22, 0.12, 0.3, 0xe2382b, -0.15, 1.14, -0.17, g); // 警示燈
+    box(0.22, 0.12, 0.3, 0x2f6fe0, -0.15, 1.14, 0.17, g);
+    [[-0.65, -0.45], [-0.65, 0.45], [0.65, -0.45], [0.65, 0.45]].forEach(function (p) { wheel(0.2, p[0], 0.2, p[1], g); });
+    g.position.set(x, 0, z); g.rotation.y = rot || 0;
+    parent.add(g);
+    return g;
+  }
+  // 郵筒：長方形筒身、圓弧頂、投信口（臺灣的郵筒：綠色寄平信、紅色寄限時和航空）
+  function mailbox(color, x, z, parent) {
+    box(0.46, 0.22, 0.4, 0x5a5f63, x, 0, z, parent);
+    box(0.62, 0.8, 0.5, color, x, 0.22, z, parent);
+    var top = cyl(0.25, 0.25, 0.62, color, x, 0.77, z, parent, 16);
+    top.rotation.z = Math.PI / 2;
+    box(0.36, 0.05, 0.03, 0x1e1e1e, x, 0.84, z + 0.26, parent); // 投信口
+    box(0.36, 0.2, 0.02, 0xffffff, x, 0.5, z + 0.26, parent); // 白色標示
+  }
+  // 中華郵政的招牌：綠底、左邊紅色郵徽、白字「郵局 POST」、右邊紅白藍斜條
+  function postSignTex() {
+    return canvasTex(1024, 112, function (c, W, H) {
+      c.fillStyle = "#13a04b"; c.fillRect(0, 0, W, H);
+      c.fillStyle = "#ffffff"; c.beginPath(); c.arc(70, 56, 40, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#d8262b"; c.beginPath(); c.arc(70, 56, 34, 0, Math.PI * 2); c.fill();
+      c.fillStyle = "#ffffff";
+      c.fillRect(48, 36, 44, 7); c.fillRect(48, 52, 44, 7); c.fillRect(48, 68, 44, 7); c.fillRect(66, 28, 8, 56);
+      c.textBaseline = "middle"; c.textAlign = "left";
+      c.font = "bold 76px " + FONT; c.fillText("郵 局", 130, 60);
+      c.font = "bold 70px " + FONT; c.fillText("POST", 470, 60);
+      [["#d8262b", 0], ["#ffffff", 26], ["#2b2f6b", 52]].forEach(function (b) {
+        c.fillStyle = b[0]; c.beginPath();
+        c.moveTo(860 + b[1], H); c.lineTo(930 + b[1], 0); c.lineTo(952 + b[1], 0); c.lineTo(882 + b[1], H); c.fill();
+      });
+    });
+  }
+  // 郵局樓上的立面：米色磁磚、每層三扇窗、白色鐵窗
+  function postFacadeTex() {
+    return canvasTex(640, 330, function (c, W, H) {
+      c.fillStyle = "#d9cbb0"; c.fillRect(0, 0, W, H);
+      for (var f = 0; f < 3; f++) {
+        var y = 74 + f * 86;
+        c.fillStyle = "#c2b293"; c.fillRect(0, y + 74, W, 8);
+        [30, 240, 450].forEach(function (x) {
+          c.fillStyle = "#6b6f72"; c.fillRect(x, y + 8, 160, 58);
+          c.fillStyle = "#86a0ae"; c.fillRect(x + 5, y + 13, 150, 48);
+          c.fillStyle = "#eeeeea";
+          for (var b = x + 5; b < x + 160; b += 15) c.fillRect(b, y + 8, 3, 58);
+          c.fillRect(x, y + 34, 160, 3);
+        });
+      }
+    });
+  }
+  // 派出所的立面：淺灰色格子框、紅色牆板、白框深色窗、窗下的冷氣
+  function policeFacadeTex(cols, cross) {
+    var CW = 130, RH = 90;
+    return canvasTex(cols * CW, 4 * RH, function (c, W, H) {
+      c.fillStyle = "#d2cfc9"; c.fillRect(0, 0, W, H);
+      for (var r = 0; r < 4; r++) for (var k = 0; k < cols; k++) {
+        var x = k * CW + 9, y = r * RH + 8, w = CW - 18, h = RH - 16;
+        c.fillStyle = "#b4473c"; c.fillRect(x, y, w, h);
+        if (cross && r >= 2 && k === 1) {
+          // 二樓、三樓同一欄的木頭 X 裝飾
+          c.fillStyle = "#e4d4b6"; c.fillRect(x, y, w, h);
+          c.strokeStyle = "#8a5a3c"; c.lineWidth = 12;
+          c.strokeRect(x + 6, y + 6, w - 12, h - 12);
+          c.beginPath(); c.moveTo(x + 8, y + 8); c.lineTo(x + w - 8, y + h - 8); c.moveTo(x + w - 8, y + 8); c.lineTo(x + 8, y + h - 8); c.stroke();
+          continue;
+        }
+        c.fillStyle = "#f2f2ee"; c.fillRect(x + 14, y + 6, w - 28, h - 30);
+        c.fillStyle = "#566573"; c.fillRect(x + 19, y + 11, w - 38, h - 40);
+        c.fillStyle = "#f2f2ee"; c.fillRect(x + w / 2 - 2, y + 11, 4, h - 40);
+        c.fillStyle = "#e9e9e4"; c.fillRect(x + w - 48, y + h - 21, 34, 18); // 冷氣
+        c.fillStyle = "#b9b9b3"; c.fillRect(x + w - 44, y + h - 17, 26, 3);
+      }
+    });
+  }
+  // 派出所的圓形徽章招牌
+  function policeBadgeTex() {
+    return canvasTex(256, 256, function (c) {
+      [["#263f7d", 124], ["#ffffff", 104], ["#c8372d", 90], ["#263f7d", 58]].forEach(function (r) {
+        c.fillStyle = r[0]; c.beginPath(); c.arc(128, 128, r[1], 0, Math.PI * 2); c.fill();
+      });
+      c.fillStyle = "#f2c14e";
+      for (var i = 0; i < 5; i++) {
+        var a = i * Math.PI * 2 / 5 - Math.PI / 2;
+        c.beginPath(); c.arc(128 + Math.cos(a) * 24, 128 + Math.sin(a) * 24, 17, 0, Math.PI * 2); c.fill();
+      }
+      c.fillStyle = "#ffffff"; c.beginPath(); c.arc(128, 128, 12, 0, Math.PI * 2); c.fill();
+    });
+  }
+
+  // 消防車：紅色車身、白色腰線、車頂的梯子和警示燈（車頭朝 +z）
+  function fireTruck(x, z, parent) {
+    var g = new THREE.Group();
+    box(1.0, 0.85, 1.4, 0xd8262b, 0, 0.22, -0.35, g); // 後面的車廂
+    box(1.0, 0.95, 0.75, 0xe2382b, 0, 0.22, 0.75, g); // 車頭
+    box(0.86, 0.38, 0.04, 0x3f4f5e, 0, 0.7, 1.13, g); // 擋風玻璃
+    box(1.02, 0.08, 2.17, 0xf4f4f0, 0, 0.42, 0.02, g); // 白色腰線
+    box(0.5, 0.1, 0.25, 0xe2382b, -0.2, 1.17, 0.7, g); // 警示燈
+    box(0.5, 0.1, 0.25, 0x2f6fe0, 0.2, 1.17, 0.7, g);
+    [-0.32, 0.32].forEach(function (lx) { box(0.06, 0.08, 1.4, 0xc9ccd0, lx, 1.07, -0.35, g); }); // 梯子
+    for (var r = 0; r < 5; r++) box(0.64, 0.05, 0.05, 0xc9ccd0, 0, 1.08, -0.95 + r * 0.3, g);
+    [[-0.45, -0.7], [0.45, -0.7], [-0.45, 0.75], [0.45, 0.75]].forEach(function (p) { var w = wheel(0.22, p[0], 0.22, p[1], g); w.rotation.set(0, 0, Math.PI / 2); });
+    g.position.set(x, 0, z);
+    parent.add(g);
+    return g;
+  }
+  // 圖書館的立面：白牆、凹進去的窗戶、窗下的黃色牆板、最上層的綠色遮雨棚
+  function libraryFacadeTex() {
+    return canvasTex(780, 360, function (c, W, H) {
+      c.fillStyle = "#f1eee6"; c.fillRect(0, 0, W, H);
+      c.fillStyle = "#5fae6a"; c.fillRect(0, 0, W, 16); // 綠色遮雨棚
+      for (var i = 0; i < W; i += 26) { c.fillStyle = "#4b9558"; c.fillRect(i, 0, 3, 16); }
+      for (var f = 0; f < 4; f++) {
+        var y = 22 + f * 84;
+        for (var b = 0; b < 5; b++) {
+          var x = 12 + b * 154;
+          c.fillStyle = "#d9d5cb"; c.fillRect(x, y, 140, 76); // 凹進去的窗框
+          c.fillStyle = "#8fb2c4"; c.fillRect(x + 6, y + 6, 128, 40);
+          c.fillStyle = "#f1eee6"; for (var m = x + 32; m < x + 134; m += 32) c.fillRect(m, y + 6, 3, 40);
+          c.fillStyle = f === 0 ? "#f1eee6" : "#e3b34c"; c.fillRect(x, y + 50, 140, 26); // 黃色牆板
+        }
+      }
+    });
+  }
+  // 圖書館塔樓底下的壁畫：綠色的樹幹，樹上是一本打開的書
+  function libraryMuralTex() {
+    return canvasTex(160, 300, function (c) {
+      c.fillStyle = "#e9e5dc"; c.fillRect(0, 0, 160, 300);
+      c.strokeStyle = "#5c9c55"; c.lineWidth = 14; c.lineCap = "round";
+      c.beginPath(); c.moveTo(80, 300); c.lineTo(80, 170); c.lineTo(40, 110); c.moveTo(80, 170); c.lineTo(122, 120); c.stroke();
+      c.fillStyle = "#ffffff"; c.strokeStyle = "#c0553f"; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(18, 70); c.lineTo(78, 82); c.lineTo(78, 122); c.lineTo(18, 110); c.closePath(); c.fill(); c.stroke();
+      c.beginPath(); c.moveTo(142, 70); c.lineTo(82, 82); c.lineTo(82, 122); c.lineTo(142, 110); c.closePath(); c.fill(); c.stroke();
+    });
+  }
+  // 臺北市立圖書館的招牌：淡藍白底、灰字
+  function librarySignTex() {
+    return canvasTex(512, 200, function (c) {
+      c.fillStyle = "#dfeef0"; c.fillRect(0, 0, 512, 200);
+      c.strokeStyle = "#4f6670"; c.lineWidth = 7;
+      for (var a = 0; a < 4; a++) { var t = a * Math.PI / 4; c.beginPath(); c.moveTo(48 - Math.cos(t) * 26, 84 - Math.sin(t) * 26); c.lineTo(48 + Math.cos(t) * 26, 84 + Math.sin(t) * 26); c.stroke(); }
+      c.fillStyle = "#4f6670"; c.textBaseline = "middle"; c.textAlign = "left";
+      c.font = "bold 36px " + FONT; c.fillText("臺北市立圖書館天母分館", 92, 84);
+      c.font = "22px " + FONT; c.fillText("Taipei Public Library Tianmu Branch", 92, 132);
+    });
   }
 
   var BUILD = {
@@ -534,43 +772,151 @@
       box(1.4, 0.5, 0.6, 0x4f9a55, -1.9, 0.3, 2.9, g);
       tree(3.0, 2.4, 0.6, g);
     },
+    // 天母郵局（中山北路七段 130 號）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：米色老公寓的一樓、綠色「郵局 POST」長招牌（左邊紅色郵徽、右邊紅白藍斜條）、
+    // 深褐色磁磚的騎樓柱子、玻璃門和提款機、門口一綠一紅兩個郵筒、樓上的白色鐵窗和冷氣、行道樹和機車
     post: function (g) {
-      box(5, 3, 3.6, 0xeff0e6, 0, 0, 0, g);
-      box(5.2, 0.6, 3.8, 0x2f8a4f, 0, 3, 0, g);
-      box(4.4, 0.5, 0.1, 0x2f8a4f, 0, 2.2, 1.82, g);
-      box(2, 1.6, 0.1, 0x9fc6de, 0, 0, 1.82, g);
-      cyl(0.32, 0.32, 1.2, 0xd8392b, 2.9, 0, 2.6, g);
-      cyl(0.32, 0.32, 1.2, 0x2f8a4f, 3.7, 0, 2.6, g);
+      var BEIGE = 0xd9cbb0, PILLAR = 0x6e3b33;
+      box(7.6, 0.2, 5.4, 0xc9c6bf, 0, 0, 0.2, g); // 騎樓和人行道
+      // 一樓店面（往內縮，前面是騎樓）
+      box(6.2, 1.3, 2.4, 0xe9e6df, 0, 0.2, -1.2, g);
+      box(3.4, 1.05, 0.06, 0x9fc6de, 0.6, 0.2, 0.02, g); // 玻璃門窗
+      box(0.06, 1.05, 0.08, 0xd9d9d9, 0.6, 0.2, 0.06, g);
+      box(0.75, 1.1, 0.25, 0xd9dcdf, -1.75, 0.2, 0.1, g); // 提款機
+      box(0.75, 0.18, 0.27, 0x13a04b, -1.75, 1.12, 0.1, g);
+      box(0.45, 0.3, 0.04, 0x2f4858, -1.75, 0.72, 0.24, g);
+      // 樓上（伸出來蓋住騎樓）
+      var side = mat(BEIGE);
+      faceBox(6.4, 3.3, 3.4, [side, side, mat(0xcfc3aa), mat(0xe4ddd0), texMat(postFacadeTex()), side], 0, 1.5, -0.6, g);
+      box(6.5, 0.22, 3.5, 0xc2b293, 0, 4.8, -0.6, g); // 女兒牆
+      box(1.3, 0.6, 1.0, 0xcfc3aa, -1.8, 5.0, -1.2, g); // 樓梯間
+      cyl(0.32, 0.32, 0.5, 0x8fa3b0, 1.6, 5.0, -1.4, g, 12); // 水塔
+      [[-2.2, 2.35], [1.0, 3.2], [2.3, 4.05]].forEach(function (p) { box(0.5, 0.3, 0.25, 0xeeeeea, p[0], p[1], 1.25, g); });
+      // 騎樓柱子
+      [-2.95, 0, 2.95].forEach(function (x) { box(0.42, 1.5, 0.42, PILLAR, x, 0.2, 0.85, g); });
+      // 綠色長招牌
+      var sign = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 0.7), texMat(postSignTex()));
+      sign.position.set(0, 2.05, 1.12); g.add(sign);
+      box(6.4, 0.06, 0.12, 0xf2f2ee, 0, 2.4, 1.08, g);
+      // 門口的郵筒（「找找看」要找的東西）
+      mailbox(0x2e9a4f, 0.55, 2.4, g);
+      mailbox(0xd8392b, 1.4, 2.4, g);
+      // 機車和行道樹
+      scooter(0x3b4a6b, -2.3, 2.2, 0, g);
+      scooter(0xe9e6df, -1.4, 2.2, 0.1, g);
+      banyan(-3.7, 2.5, 0.85, g);
+      banyan(4.1, 2.5, 0.85, g);
     },
+    // 天母派出所（中山北路七段，路口轉角）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：五層樓、淺灰色格子框配紅色牆板、二樓和三樓同一欄的木頭 X 裝飾、門口上方的紅色招牌、圓形警察徽章招牌、
+    // 門口上方的金色老鷹警徽、藍框玻璃門和台階、門口停著警車和警用機車、灰色矮牆、旁邊的大榕樹
     police: function (g) {
-      box(5, 3.4, 3.6, 0xf3f5f8, 0, 0, 0, g);
-      box(5.05, 0.6, 3.65, 0x2f5fa8, 0, 2.2, 0, g);
-      box(1.4, 1.7, 0.1, 0x6d8fb7, 0, 0, 1.82, g);
-      box(0.5, 0.35, 0.5, 0xe2382b, -0.4, 3.4, 0, g);
-      box(0.5, 0.35, 0.5, 0x2f6fe0, 0.4, 3.4, 0, g);
-      for (var k = 0; k < 3; k++) {
-        box(1.1, 0.5, 0.35, 0xffffff, -1.6 + k * 1.6, 0.3, 2.7, g);
-        ball(0.25, 0x333333, -2.05 + k * 1.6, 0.25, 2.7, g);
-        ball(0.25, 0x333333, -1.15 + k * 1.6, 0.25, 2.7, g);
-      }
+      var Z = -0.9; // 房子往後退一點，前面才停得下警車
+      // 一樓：灰色石材
+      box(5.0, 1.4, 3.8, 0xb9b6b0, 0, 0, Z, g);
+      box(1.5, 1.0, 0.06, 0x3a4650, 0.7, 0.2, Z + 1.92, g); // 玻璃門
+      box(0.18, 1.3, 0.12, 0x2f5fa8, -0.15, 0, Z + 1.94, g); // 藍色門框
+      box(0.18, 1.3, 0.12, 0x2f5fa8, 1.55, 0, Z + 1.94, g);
+      box(1.9, 0.18, 0.35, 0x4a3a32, 0.7, 1.22, Z + 2.0, g); // 門上的深色雨遮
+      var psign = signMesh("天母派出所", 1.7, 0.26, { bg: "#c8372d", fg: "#ffffff" }); // 門口上方的紅色招牌
+      psign.position.set(0.7, 1.12, Z + 2.18); g.add(psign);
+      box(2.0, 0.1, 0.5, 0xc9c6bf, 0.7, 0, Z + 2.15, g); // 台階
+      box(2.0, 0.1, 0.3, 0xc9c6bf, 0.7, 0.1, Z + 2.05, g);
+      box(1.2, 0.8, 0.06, 0x8a97a3, -1.6, 0.4, Z + 1.92, g); // 左邊窗戶
+      // 二樓到五樓：灰框紅牆
+      var front = texMat(policeFacadeTex(4, true)), sideT = texMat(policeFacadeTex(3, false));
+      faceBox(5.2, 3.6, 4.0, [sideT, sideT, mat(0xc9c6c0), mat(0xc9c6c0), front, sideT], 0, 1.4, Z, g);
+      box(5.3, 0.2, 4.1, 0xc9c6c0, 0, 5.0, Z, g); // 女兒牆
+      box(1.4, 0.7, 1.2, 0xd2cfc9, -1.2, 5.2, Z - 0.6, g); // 樓梯間
+      cyl(0.03, 0.03, 1.4, 0x777777, 1.6, 5.2, Z - 0.8, g, 5); // 天線
+      box(0.7, 0.04, 0.04, 0x777777, 1.6, 6.2, Z - 0.8, g);
+      // 金色老鷹警徽
+      ball(0.16, 0xe8b83a, 0.7, 1.62, Z + 2.04, g);
+      [-1, 1].forEach(function (sx) {
+        var wing = box(0.42, 0.14, 0.05, 0xe8b83a, 0.7 + sx * 0.28, 1.58, Z + 2.03, g);
+        wing.rotation.z = sx * 0.35;
+      });
+      // 圓形徽章招牌（掛在右邊轉角）
+      var badge = new THREE.Mesh(new THREE.CircleGeometry(0.45, 28), texMat(policeBadgeTex()));
+      badge.position.set(2.1, 2.0, Z + 2.12); g.add(badge);
+      box(0.1, 0.5, 0.08, 0x666666, 2.1, 2.0, Z + 2.04, g);
+      // 灰色矮牆、警車、警用機車、大榕樹
+      box(2.0, 0.55, 0.18, 0xa9a8a3, -1.6, 0, Z + 2.35, g);
+      patrolCar(-1.4, 2.0, 0, g);
+      scooter(0xf4f6f8, 2.0, 1.6, 0, g);
+      banyan(3.7, -1.6, 1.15, g);
     },
+    // 消防局天母分隊（中山北路七段 194 號，在派出所隔壁）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：三層樓、一樓是停消防車的大車庫（中間一根柱子）、二樓紅磚牆配白框和陽台欄杆、
+    // 三樓白色橫條小窗、屋頂上的鐵皮棚架、左邊的戶外鐵梯和小門、門口停著紅色消防車、右邊的消防栓和榕樹
     fire: function (g) {
-      box(6, 3.8, 4, 0xd8473a, 0, 0, 0, g);
-      box(1.8, 2.4, 0.1, 0x555b66, -1.3, 0, 2.02, g);
-      box(1.8, 2.4, 0.1, 0x555b66, 1.3, 0, 2.02, g);
-      box(1.6, 6.5, 1.6, 0xc23c31, 2.6, 0, -1.4, g);
-      box(6.3, 0.3, 4.3, 0xf3f3f3, 0, 3.8, 0, g);
-      box(2.6, 1.1, 1.2, 0xe2382b, -1, 0.3, 3.5, g);
-      box(0.9, 0.7, 1.15, 0xbfe0ff, 0.1, 1.0, 3.5, g);
-      ball(0.3, 0x333333, -1.9, 0.3, 4.1, g);
-      ball(0.3, 0x333333, -0.1, 0.3, 4.1, g);
+      var Z = -0.8, WHITE = 0xf1efe9, BRICK = 0xc0553f;
+      box(7.0, 0.15, 5.6, 0xc9c6bf, 0, 0, 0.1, g); // 門口的空地
+      // 一樓：左邊辦公室，右邊是車庫
+      box(6.0, 1.6, 3.8, WHITE, 0, 0, Z, g);
+      box(4.2, 1.35, 0.1, 0x45474a, 0.8, 0.1, Z + 1.92, g); // 車庫開口（裡面暗暗的）
+      box(0.3, 1.5, 0.3, WHITE, 0.8, 0, Z + 1.9, g); // 中間的柱子
+      box(0.7, 1.0, 0.06, 0x8fb2c4, -2.4, 0.1, Z + 1.92, g); // 辦公室的玻璃門
+      ball(0.14, 0xe8b83a, -2.4, 1.38, Z + 1.98, g); // 門上的金色徽章
+      fireTruck(-0.3, 0.3, g); // 停在車庫裡和門口的消防車
+      fireTruck(1.9, 1.4, g);
+      // 二樓：白色樓板、紅磚牆、中間的窗戶、陽台欄杆
+      box(6.3, 0.3, 4.3, WHITE, 0, 1.6, Z + 0.15, g);
+      box(5.6, 1.1, 3.6, BRICK, 0, 1.9, Z - 0.1, g);
+      box(1.5, 0.75, 0.06, 0x9fbf9f, 0, 2.05, Z + 1.72, g);
+      box(1.6, 0.12, 0.1, 0x5fae6a, 0, 2.85, Z + 1.8, g); // 窗上的小遮雨棚
+      box(6.1, 0.06, 0.06, 0x6a6a6a, 0, 2.45, Z + 2.25, g); // 欄杆扶手
+      for (var p = -3; p <= 3; p += 0.5) box(0.04, 0.5, 0.04, 0x6a6a6a, p, 1.95, Z + 2.25, g);
+      box(0.6, 0.38, 0.25, 0xeeeeea, 1.8, 1.95, Z + 1.85, g); // 冷氣
+      // 三樓：白色橫條、小窗
+      box(6.1, 0.95, 3.9, WHITE, 0, 3.0, Z, g);
+      for (var w = -2.4; w <= 2.4; w += 1.2) box(0.8, 0.2, 0.06, 0x5a6670, w, 3.55, Z + 1.96, g);
+      // 屋頂的鐵皮棚架
+      [-2.8, 2.8].forEach(function (x) { [-1.6, 1.4].forEach(function (zz) { box(0.08, 0.6, 0.08, 0x8c949c, x, 3.95, Z + zz, g); }); });
+      var roof = box(6.2, 0.08, 3.6, 0x9aa3ab, 0, 4.55, Z - 0.1, g);
+      roof.rotation.x = -0.08;
+      // 左邊的戶外鐵梯
+      var stair = box(0.5, 0.08, 2.8, 0x8c949c, -3.3, 0, Z + 0.3, g);
+      stair.position.y = 0.85; stair.rotation.x = 0.6;
+      box(0.04, 0.5, 2.8, 0x6a6a6a, -3.55, 0.95, Z + 0.3, g).rotation.x = 0.6;
+      // 右邊：矮牆、紅色消防栓、交通錐、大榕樹
+      box(1.4, 0.6, 0.15, 0xa9a8a3, 3.6, 0, Z + 1.9, g);
+      cyl(0.13, 0.13, 0.45, 0xd8262b, 3.3, 0, 1.6, g, 10);
+      ball(0.13, 0xd8262b, 3.3, 0.47, 1.6, g);
+      cyl(0.02, 0.14, 0.4, 0xf08a24, 3.8, 0, 1.8, g, 8);
+      banyan(4.3, -0.4, 1.1, g);
     },
+    // 臺北市立圖書館天母分館（中山北路七段 154 巷）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：長長的四層白色大樓、窗戶下面的黃色牆板、最上層的綠色遮雨棚、
+    // 左邊高高的切角塔樓（直寫灰色大字「天母愛閱讀」，底下畫著樹和書的壁畫）、底下灰色石頭砌的擋土牆和藍色鐵捲門、
+    // 樹籬前面淡藍白色的館名招牌、門口的小樹
     library: function (g) {
-      box(6.4, 3.2, 4, 0xc49a6c, 0, 0, 0, g);
-      box(5, 2, 0.1, 0xbfe3f2, 0, 0.4, 2.02, g);
-      var colors = [0xe8704a, 0x4a7fc1, 0xf6c445, 0x3f9b5f];
-      for (var k = 0; k < 4; k++) box(3 - k * 0.4, 0.45, 2, colors[k], 0, 3.2 + k * 0.45, 0, g);
-      box(0.9, 1, 0.7, 0x4a7fc1, -3.8, 0, 1.8, g); // 還書箱
+      var Z = -0.6, WHITE = 0xf1eee6;
+      box(8.6, 0.15, 5.4, 0xc9c6bf, 0.2, 0, 0.2, g); // 人行道
+      // 石頭擋土牆（底座）
+      box(8.0, 0.8, 3.8, 0x7d8082, 0.3, 0, Z, g);
+      box(1.1, 0.65, 0.06, 0x3f78b5, 2.8, 0.05, Z + 1.92, g); // 藍色鐵捲門
+      for (var r = 0; r < 7; r++) box(1.0, 0.03, 0.03, 0x335f8f, 2.8, 0.12 + r * 0.09, Z + 1.96, g);
+      // 大樓：四層，正面貼圖
+      var side = mat(WHITE);
+      faceBox(7.0, 3.6, 3.4, [side, side, mat(0xdedad0), side, texMat(libraryFacadeTex()), side], 0.8, 0.8, Z - 0.1, g);
+      box(7.1, 0.12, 0.5, 0x5fae6a, 0.8, 4.25, Z + 1.75, g); // 綠色遮雨棚
+      [[-0.8, 2.6], [2.6, 1.75]].forEach(function (p) { box(0.5, 0.32, 0.22, 0xeeeeea, p[0], p[1], Z + 1.75, g); }); // 冷氣
+      // 左邊的切角塔樓＋壁畫
+      var tower = cyl(1.0, 1.0, 5.8, 0xe4e0d6, -3.3, 0.8, Z + 0.4, g, 8);
+      tower.rotation.y = Math.PI / 8; tower.scale.x = 1.15;
+      box(2.1, 0.15, 1.9, 0xd2cdc2, -3.3, 6.6, Z + 0.4, g);
+      var mural = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.6), texMat(libraryMuralTex()));
+      mural.position.set(-3.3, 1.8, Z + 0.4 + 0.935); g.add(mural);
+      var towerText = signMesh("天母愛閱讀", 0.8, 3.4, { bg: "#e4e0d6", fg: "#8d8a84", vertical: true }); // 塔樓上的灰色大字
+      towerText.position.set(-3.3, 4.75, Z + 0.4 + 0.935); g.add(towerText);
+      // 樹籬、館名招牌、門口的小樹
+      [[-1.6, 1.3], [0.2, 1.5], [1.9, 1.3]].forEach(function (p) { box(p[1] + 0.3, 0.7, 0.8, 0x4f9a55, p[0], 0.15, 1.75, g); });
+      var lsign = new THREE.Mesh(new THREE.PlaneGeometry(2.3, 0.9), texMat(librarySignTex()));
+      lsign.position.set(0.1, 1.05, 2.2); g.add(lsign);
+      box(2.4, 1.0, 0.06, 0xb9c6c9, 0.1, 0.55, 2.16, g);
+      box(8.0, 0.4, 0.25, 0x9a9c9c, 0.3, 0.15, 2.5, g); // 人行道邊的矮牆
+      banyan(-4.6, 2.2, 0.6, g);
     },
     river: function (g) {
       // 溪邊的木頭觀景台
@@ -580,13 +926,79 @@
       ball(0.45, 0x9a9a92, 1.9, 0.2, 0.8, g);
       ball(0.35, 0xa8a69c, -1.9, 0.15, 1.0, g);
     },
+    // 天和公園（天母東路 69 巷旁）：照實景照片（2026-11 使用者提供）。
+    // 認得出來的特徵：木屑鋪的遊戲場、深色木頭的遊戲塔（斜斜的屋頂、紅色牆板、爬梯）、
+    // 從塔上溜下來的不鏽鋼滑梯（上段是管子）、灰色拱架吊著的紅色攀爬網、
+    // 石頭柱子的長涼亭和木頭長椅、矮樹叢、大樹
     park: function (g) {
-      for (var a = -1; a <= 1; a += 2) for (var b = -1; b <= 1; b += 2) cyl(0.12, 0.12, 2.2, 0xa0522d, a * 1.3, 0, b * 1.3, g, 6);
-      pyramid(2.6, 1.5, 0xc95a49, 2.2, g);
-      box(1.6, 0.4, 0.8, 0x8a6142, 0, 0.4, 0, g);
-      box(0.8, 1.6, 0.8, 0xf6c445, 0, 0, -4.5, g);
-      var sl = box(0.8, 0.12, 2.6, 0x4a7fc1, 0, 0.8, -3.2, g);
-      sl.rotation.x = 0.55;
+      var WOOD = 0x6b4a32, STEEL = 0xc9ced3;
+      // 木屑地面和水泥路緣
+      var chips = cyl(3.6, 3.6, 0.08, 0xa0704a, 0, 0.02, 0, g, 36);
+      chips.scale.z = 0.8;
+      var curb = cyl(3.75, 3.75, 0.06, 0xd9d5cb, 0, 0.0, 0, g, 36);
+      curb.scale.z = 0.8;
+      // 遊戲塔：四根木柱、平台、木板牆、斜屋頂、紅色牆板、爬梯
+      var TX = 0.3, TZ = -0.4;
+      [[-0.55, -0.55], [-0.55, 0.55], [0.55, -0.55], [0.55, 0.55]].forEach(function (c) { box(0.14, 2.7, 0.14, WOOD, TX + c[0], 0, TZ + c[1], g); });
+      box(1.2, 0.12, 1.2, WOOD, TX, 1.15, TZ, g);
+      box(1.2, 0.75, 0.08, 0x7a5638, TX, 1.3, TZ - 0.58, g);
+      box(0.08, 0.75, 1.2, 0x7a5638, TX - 0.58, 1.3, TZ, g);
+      for (var sl = -0.45; sl <= 0.45; sl += 0.18) box(0.06, 0.7, 0.04, 0x7a5638, TX + sl, 1.3, TZ + 0.58, g); // 前面的欄杆
+      var troof = box(1.6, 0.08, 1.5, 0x55595d, TX, 2.75, TZ, g);
+      troof.rotation.x = 0.35;
+      box(0.9, 0.55, 0.06, 0xd8392b, TX - 0.2, 1.95, TZ - 0.62, g); // 紅色牆板
+      for (var st = 0; st < 4; st++) box(0.7, 0.06, 0.25, WOOD, TX - 0.1, 0.25 + st * 0.28, TZ + 0.75 + (3 - st) * 0.2, g); // 爬梯
+      // 不鏽鋼滑梯：從塔上往右前方溜下來，上段是管子
+      function along(mesh, S, E) {
+        var dx = E[0] - S[0], dy = E[1] - S[1], dz = E[2] - S[2], h = Math.hypot(dx, dz);
+        mesh.position.set((S[0] + E[0]) / 2, (S[1] + E[1]) / 2, (S[2] + E[2]) / 2);
+        mesh.rotation.order = "YXZ";
+        mesh.rotation.y = Math.atan2(dx, dz);
+        mesh.rotation.x = Math.atan2(-dy, h);
+        g.add(mesh);
+        return Math.hypot(h, dy);
+      }
+      var S = [TX + 0.6, 1.75, TZ + 0.2], M = [TX + 1.3, 1.2, TZ + 0.9], E = [TX + 2.6, 0.25, TZ + 2.4];
+      var tubeGeo = new THREE.CylinderGeometry(0.3, 0.3, 1, 14, 1, true); tubeGeo.rotateX(Math.PI / 2);
+      var tube = new THREE.Mesh(tubeGeo, new THREE.MeshStandardMaterial({ color: STEEL, roughness: 0.35, metalness: 0.4, side: THREE.DoubleSide }));
+      tube.scale.z = along(tube, S, M);
+      var chute = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.05, 1), new THREE.MeshStandardMaterial({ color: STEEL, roughness: 0.35, metalness: 0.4 }));
+      chute.scale.z = along(chute, M, E);
+      [-0.3, 0.3].forEach(function (off) {
+        var rail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.22, 1), mat(STEEL));
+        var c = Math.cos(chute.rotation.y), sn = Math.sin(chute.rotation.y);
+        rail.scale.z = along(rail, [M[0] + off * c, M[1] + 0.1, M[2] - off * sn], [E[0] + off * c, E[1] + 0.1, E[2] - off * sn]);
+      });
+      var endPad = box(0.6, 0.05, 0.6, STEEL, E[0] + 0.25, 0.22, E[2] + 0.3, g);
+      endPad.rotation.y = chute.rotation.y;
+      box(0.6, 0.06, 0.06, 0xd8392b, E[0] + 0.35, 0.2, E[2] + 0.55, g).rotation.y = chute.rotation.y; // 滑梯尾端的紅線
+      // 攀爬網：灰色拱架＋紅色繩網
+      var arch = new THREE.Mesh(new THREE.TorusGeometry(1.35, 0.07, 8, 24, Math.PI), mat(0xa0a6ad));
+      arch.position.set(-2.0, 0, -0.2); arch.rotation.y = 0.5; g.add(arch);
+      var net = new THREE.Mesh(new THREE.SphereGeometry(1.15, 10, 5, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xb0484a, wireframe: true }));
+      net.position.set(-2.0, 0.05, -0.2); net.scale.y = 0.85; g.add(net);
+      // 長涼亭：深色平屋頂、淺色屋簷、石頭柱子、木頭長椅
+      var PX = 1.0, PZ = -3.3;
+      [-2.2, 0, 2.2].forEach(function (x) {
+        [-0.6, 0.6].forEach(function (z) {
+          box(0.32, 1.7, 0.32, 0x9b9690, PX + x, 0, PZ + z, g);
+          for (var k = 0; k < 4; k++) box(0.34, 0.04, 0.34, 0x7d7873, PX + x, 0.3 + k * 0.4, PZ + z, g);
+        });
+      });
+      box(5.4, 0.1, 1.9, 0xe9e4da, PX, 1.7, PZ, g);
+      box(5.6, 0.14, 2.1, 0x5a4636, PX, 1.8, PZ, g);
+      box(0.25, 0.35, 0.04, 0xc0392b, PX + 2.2, 1.0, PZ + 0.78, g); // 柱子上的小紅牌
+      [-1.1, 1.1].forEach(function (x) {
+        box(1.2, 0.08, 0.4, 0x5a3e2a, PX + x, 0.4, PZ - 0.1, g);
+        box(1.2, 0.4, 0.06, 0x5a3e2a, PX + x, 0.48, PZ - 0.3, g);
+        box(0.06, 0.4, 0.35, 0x333333, PX + x - 0.5, 0, PZ - 0.1, g);
+        box(0.06, 0.4, 0.35, 0x333333, PX + x + 0.5, 0, PZ - 0.1, g);
+      });
+      // 矮樹叢和大樹
+      box(2.0, 0.55, 0.6, 0x4f9a55, -2.4, 0, 2.1, g);
+      box(1.4, 0.5, 0.6, 0x5aa35f, 3.9, 0, -1.4, g);
+      banyan(-3.9, -2.6, 1.0, g);
+      banyan(4.4, 1.6, 0.9, g);
     }
   };
 
@@ -630,7 +1042,7 @@
     g.position.set(stn.pos[0], 0, stn.pos[1]);
     var near = pts[stn.at];
     g.rotation.y = stn.rot != null ? stn.rot : Math.atan2(near.x - stn.pos[0], near.z - stn.pos[1]);
-    if (!stn.noBuilding && BUILD[stn.kind]) { BUILD[stn.kind](g); if (stn.kind !== "school") g.scale.setScalar(1.15); }
+    if (!stn.noBuilding && BUILD[stn.kind]) { BUILD[stn.kind](g); if (stn.kind !== "school") g.scale.setScalar(stn.scale || 1.15); }
     scene.add(g);
     buildings[k] = g;
     g.traverse(function (o) { if (o.isMesh) { o.userData.station = k; pickables.push(o); } });
@@ -893,7 +1305,7 @@
   function cardOpen() { return $("card").classList.contains("show"); }
   function desiredCam() {
     var tgt, d = dist;
-    if (camMode === "overview") { tgt = new THREE.Vector3(-2, 0, 0); d = 82; }
+    if (camMode === "overview") { tgt = new THREE.Vector3(-2, 0, -4); d = 86; }
     else if (cardOpen() && !walking) {
       // 打開卡片時，鏡頭拉近到這一站的建築（照片在右邊，3D 在左邊，方便對照）
       var s = ST[state.at];
@@ -1089,9 +1501,16 @@
 
   /* ---------- 地點卡：照片在右邊，3D 在左邊 ---------- */
   var card = $("card"), sheet = $("sheet"), showIdx = 0;
+  // 到站時鏡頭轉到建築正面（建築照真實位置朝向馬路，有些背對預設鏡頭）
+  function faceStation(k) {
+    if (ST[k].noBuilding || !buildings[k]) return;
+    var want = buildings[k].rotation.y + 0.45;
+    yaw = want + Math.round((yaw - want) / (Math.PI * 2)) * Math.PI * 2; // 取最接近現在的角度，不要轉一大圈
+  }
   function openStation(k) {
     closeMenu();
     if (state.at !== k) state.at = k;
+    faceStation(k);
     state.visited[ST[k].id] = true;
     var stn = ST[k], list = photos[stn.id] || [], say = [stn.name];
     if (showIdx >= list.length) showIdx = 0;
