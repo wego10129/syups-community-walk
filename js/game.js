@@ -1301,6 +1301,8 @@
   /* ---------- 鏡頭 ---------- */
   var camMode = "follow";
   var yaw = 0.5, pitch = 1.0, dist = 30;
+  var yawView = yaw; // 畫面上真正用的角度：慢慢追上 yaw，鏡頭才會繞著轉，不會一下子跳過去
+  function angTo(a, b) { return a + Math.atan2(Math.sin(b - a), Math.cos(b - a)); } // b 換成離 a 最近的同一個角度
   var camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
   function cardOpen() { return $("card").classList.contains("show"); }
   function desiredCam() {
@@ -1314,7 +1316,7 @@
     } else tgt = kid.position.clone();
     return {
       tgt: tgt,
-      pos: new THREE.Vector3(tgt.x + Math.sin(yaw) * Math.cos(pitch) * d, Math.sin(pitch) * d, tgt.z + Math.cos(yaw) * Math.cos(pitch) * d)
+      pos: new THREE.Vector3(tgt.x + Math.sin(yawView) * Math.cos(pitch) * d, Math.sin(pitch) * d, tgt.z + Math.cos(yawView) * Math.cos(pitch) * d)
     };
   }
   var pointers = {}, dragMoved = 0, pinchStart = 0, distStart = 0;
@@ -1344,6 +1346,7 @@
     }
     dragMoved += Math.abs(dx) + Math.abs(dy);
     yaw -= dx * 0.008;
+    yawView -= dx * 0.008; // 手拖的時候馬上跟著轉
     pitch = Math.max(0.45, Math.min(1.35, pitch + dy * 0.005));
   });
   canvas.addEventListener("pointerup", function (e) {
@@ -1504,8 +1507,7 @@
   // 到站時鏡頭轉到建築正面（建築照真實位置朝向馬路，有些背對預設鏡頭）
   function faceStation(k) {
     if (ST[k].noBuilding || !buildings[k]) return;
-    var want = buildings[k].rotation.y + 0.45;
-    yaw = want + Math.round((yaw - want) / (Math.PI * 2)) * Math.PI * 2; // 取最接近現在的角度，不要轉一大圈
+    yaw = angTo(yawView, buildings[k].rotation.y + 0.45); // 取最接近現在的角度，不要轉一大圈；yawView 會慢慢繞過去
   }
   function openStation(k) {
     closeMenu();
@@ -1932,7 +1934,7 @@
       wk.obj.rotation.y = Math.atan2(d.x, d.z);
     });
     var n = nextIndex();
-    var sc = camMode === "overview" ? 1.5 : 0.9;
+    var sc = camMode === "overview" ? 1.3 : 0.9; // 全圖時站牌縮小一點，才不會擠在一起
     signs.forEach(function (sg, k) {
       var bounce = (k === n && !walking) ? Math.abs(Math.sin(time * 3)) * 0.6 : 0;
       sg.sprite.position.y = sg.sprite.userData.baseY + bounce;
@@ -1941,6 +1943,12 @@
     });
     ring.scale.setScalar(1 + Math.sin(time * 3) * 0.08);
     centerPick.forEach(function (cs) { var k2 = camMode === "overview" ? 1.6 : 1; cs.scale.set(6 * k2, 2.8 * k2, 1); });
+    // 跟拍：走路時鏡頭慢慢轉到小隊後面（手指按著畫面時不搶）
+    if (walking && camMode === "follow" && !Object.keys(pointers).length && !(tour.on && tour.paused)) {
+      var behind = angTo(yaw, kid.rotation.y + Math.PI);
+      yaw += (behind - yaw) * (1 - Math.pow(0.35, dt));
+    }
+    yawView += (angTo(yawView, yaw) - yawView) * (1 - Math.pow(0.08, dt));
     var c = desiredCam();
     var lerp = first ? 1 : 1 - Math.pow(0.02, dt);
     first = false;
