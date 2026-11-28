@@ -1291,6 +1291,8 @@
     closeMenu();
     walkTarget = cum[ST[k].at];
     walking = true;
+    var f = frontYaw(k);
+    camWalk = { from: yawView, to: f == null ? yawView : angTo(yawView, f), s0: walkS };
     state.at = k;
     arriveCb = cb;
     camMode = "follow";
@@ -1301,18 +1303,28 @@
   /* ---------- 鏡頭 ---------- */
   var camMode = "follow";
   var yaw = 0.5, pitch = 1.0, dist = 30;
-  var yawView = yaw; // 畫面上真正用的角度：慢慢追上 yaw，鏡頭才會繞著轉，不會一下子跳過去
+  var yawView = yaw;
+  var CAM_TURN = 0.9;  // 鏡頭每秒最多轉幾弧度（0.9 ≈ 每秒 50 度）
+  var camWalk = { from: yaw, to: yaw, s0: 0 }; // 這一段路鏡頭從哪個角度轉到哪個角度 // 畫面上真正用的角度：慢慢追上 yaw，鏡頭才會繞著轉，不會一下子跳過去
   function angTo(a, b) { return a + Math.atan2(Math.sin(b - a), Math.cos(b - a)); } // b 換成離 a 最近的同一個角度
   var camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
   function cardOpen() { return $("card").classList.contains("show"); }
   function desiredCam() {
     var tgt, d = dist;
-    if (camMode === "overview") { tgt = new THREE.Vector3(-2, 0, -4); d = 86; }
+    if (camMode === "overview") {
+      // 全圖：畫面越窄（iPad 4:3、直式）鏡頭拉越遠，整張地圖才放得下，北邊的站牌不會跑到徽章底下
+      tgt = new THREE.Vector3(-2, 0, -7); d = 86 * Math.max(1, Math.min(1.7, 1.75 / camera.aspect));
+    }
     else if (cardOpen() && !walking) {
       // 打開卡片時，鏡頭拉近到這一站的建築（照片在右邊，3D 在左邊，方便對照）
-      var s = ST[state.at];
-      tgt = new THREE.Vector3((s.pos[0] + kid.position.x) / 2, 2, (s.pos[1] + kid.position.z) / 2);
+      var s = ST[peek >= 0 ? peek : state.at];
+      tgt = peek >= 0 ? new THREE.Vector3(s.pos[0], 2, s.pos[1])
+        : new THREE.Vector3((s.pos[0] + kid.position.x) / 2, 2, (s.pos[1] + kid.position.z) / 2);
       d = Math.min(dist, 24);
+    } else if (!walking && !ST[state.at].noBuilding) {
+      // 停在站上：對準小隊和建築的中間，建築上方的站牌才不會跑到畫面最上面被徽章擋住
+      var s2 = ST[state.at];
+      tgt = new THREE.Vector3((s2.pos[0] + kid.position.x) / 2, 2, (s2.pos[1] + kid.position.z) / 2);
     } else tgt = kid.position.clone();
     return {
       tgt: tgt,
@@ -1347,6 +1359,7 @@
     dragMoved += Math.abs(dx) + Math.abs(dy);
     yaw -= dx * 0.008;
     yawView -= dx * 0.008; // 手拖的時候馬上跟著轉
+    camWalk.from -= dx * 0.008; camWalk.to -= dx * 0.008; // 走路中拖動：整段的轉向一起偏過去，放手後不會彈回
     pitch = Math.max(0.45, Math.min(1.35, pitch + dy * 0.005));
   });
   canvas.addEventListener("pointerup", function (e) {
@@ -1364,20 +1377,23 @@
   var ray = new THREE.Raycaster();
   function tap(x, y) {
     ray.setFromCamera(new THREE.Vector2((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1), camera);
-    var hit = ray.intersectObjects(pickables, false)[0];
-    if (!hit) return;
+    var hit = ray.intersectObjects(pickables, false).filter(function (h) { return h.object.visible; })[0];
+    if (!hit) { if (cardOpen() && !tour.on) closeCard(); return; } // 點空白處關掉卡片
     if (hit.object.userData.center) { toast(ART.map(), TOUR.center.tip); return; }
     var k = hit.object.userData.station;
     if (k === 0 && state.at >= ST.length - 2) k = ST.length - 1;
     chooseStation(k);
   }
-  // 點站牌或上方的地點：下一站就走過去，其他站直接跳過去
+  // 點站牌、徽章或建築：下一站就走過去；其他站只是「看一下」——鏡頭飛過去、打開卡片，小隊留在原地，
+  // 關掉卡片鏡頭飛回小隊，「下一站」照原本的路線繼續（老師隨意點也不會打亂腳本）
+  var peek = -1;
   function chooseStation(k) {
     if (tour.on) stopTour();
     if (walking) return;
-    if (k === state.at) { openStation(k); return; }
-    if (k === nextIndex()) walkTo(k, function () { openStation(k); });
-    else teleport(k, function () { openStation(k); });
+    if (k === state.at) { peek = -1; openStation(k); return; }
+    if (k === nextIndex() && (!cardOpen() || peek < 0)) { if (cardOpen()) closeCard(); walkTo(k, function () { openStation(k); }); return; }
+    peek = k;
+    openStation(k);
   }
   var poofT = 0;
   function poof() { if (!(window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) poofT = 0.45; }
@@ -1437,11 +1453,12 @@
   $("viewBtn").onclick = function () {
     if (cardOpen()) closeCard();
     camMode = camMode === "overview" ? "follow" : "overview";
+    if (camMode === "overview") yaw = angTo(yawView, 0.5); // 全圖固定北邊在上面，不管剛剛面對哪一站
     $("viewBtn").classList.toggle("on", camMode === "overview");
   };
   $("menuBtn").onclick = function () { $("menu").classList.toggle("show"); };
   function closeMenu() { $("menu").classList.remove("show"); }
-  $("zyBtn").onclick = function () { state.zhuyin = !state.zhuyin; refresh(); if (cardOpen()) openStation(state.at); };
+  $("zyBtn").onclick = function () { state.zhuyin = !state.zhuyin; refresh(); if (cardOpen()) openStation(peek >= 0 ? peek : state.at); };
   $("shareMenuBtn").onclick = function () { closeMenu(); openShare(); };
   var resetArm = 0;
   $("resetBtn").onclick = function () {
@@ -1472,7 +1489,7 @@
         if (url) list.push(url);
         if (--left === 0) {
           photos[id] = list; dbPut(id, list); photoSprite(k);
-          if (cardOpen() && state.at === k) openStation(k);
+          if (cardOpen() && (peek >= 0 ? peek : state.at) === k) openStation(k);
         }
       });
     });
@@ -1505,15 +1522,17 @@
   /* ---------- 地點卡：照片在右邊，3D 在左邊 ---------- */
   var card = $("card"), sheet = $("sheet"), showIdx = 0;
   // 到站時鏡頭轉到建築正面（建築照真實位置朝向馬路，有些背對預設鏡頭）
+  function frontYaw(k) { return (ST[k].noBuilding || !buildings[k]) ? null : buildings[k].rotation.y + 0.45; }
   function faceStation(k) {
-    if (ST[k].noBuilding || !buildings[k]) return;
-    yaw = angTo(yawView, buildings[k].rotation.y + 0.45); // 取最接近現在的角度，不要轉一大圈；yawView 會慢慢繞過去
+    var f = frontYaw(k);
+    if (f != null) yaw = angTo(yawView, f); // 取最接近現在的角度，不要轉一大圈；yawView 會慢慢繞過去
   }
   function openStation(k) {
     closeMenu();
-    if (state.at !== k) state.at = k;
+    if (k !== peek) { peek = -1; state.at = k; state.visited[ST[k].id] = true; }
+    camMode = "follow";
+    $("viewBtn").classList.remove("on");
     faceStation(k);
-    state.visited[ST[k].id] = true;
     var stn = ST[k], list = photos[stn.id] || [], say = [stn.name];
     if (showIdx >= list.length) showIdx = 0;
     sheet.innerHTML = "";
@@ -1568,8 +1587,15 @@
     var foot = el("div", "foot");
     var n = k + 1 < ST.length ? k + 1 : -1;
     if (tour.on) foot.style.display = "none";
-    var nx = el("button", "btn", zy(n === -1 ? "做家長分享圖" : "▶ 下一站：" + ST[n].name));
-    nx.onclick = function () { closeCard(); if (n === -1) openShare(); else chooseStation(n); };
+    var nx;
+    if (k === peek) {
+      // 只是看一下：按鈕帶大家回到小隊，下一站照原本的路線
+      nx = el("button", "btn", zy("↩ 回到小隊"));
+      nx.onclick = function () { closeCard(); };
+    } else {
+      nx = el("button", "btn", zy(n === -1 ? "做家長分享圖" : "▶ 下一站：" + ST[n].name));
+      nx.onclick = function () { closeCard(); if (n === -1) openShare(); else chooseStation(n); };
+    }
     foot.appendChild(nx);
     sheet.appendChild(foot);
 
@@ -1579,6 +1605,8 @@
     refresh();
   }
   function closeCard() {
+    if (peek >= 0 && buildings[state.at]) faceStation(state.at); // 飛回小隊時，轉回這一站的正面
+    peek = -1;
     card.classList.remove("show");
     document.body.classList.remove("carded");
     onResize();
@@ -1884,15 +1912,34 @@
     camera.aspect = innerWidth / innerHeight;
     camera.fov = camera.aspect < 1 ? 58 : 45;
     // 打開地點卡時，把 3D 畫面往左（直式往上）推，讓建築露在卡片旁邊
+    applyOffset();
+  }
+  var offNow = 0; // 0：沒有卡片，1：卡片打開（畫面推到旁邊）；主迴圈裡慢慢變過去
+  function applyOffset() {
     var W = innerWidth, H = innerHeight;
-    if (document.body.classList.contains("carded")) {
-      if (W >= H) camera.setViewOffset(W, H, W * 0.22, 0, W, H);
-      else camera.setViewOffset(W, H, 0, H * 0.24, W, H);
+    if (offNow > 0.001) {
+      if (W >= H) camera.setViewOffset(W, H, W * 0.22 * offNow, 0, W, H);
+      else camera.setViewOffset(W, H, 0, H * 0.24 * offNow, W, H);
     } else camera.clearViewOffset();
     camera.updateProjectionMatrix();
   }
   addEventListener("resize", onResize);
   onResize();
+  faceStation(state.at); yawView = yaw; // 一打開就面對小隊所在那一站的正面
+  // 站牌跑到上面的標題、徽章底下時變淡，不會被擋住看不清楚、也不會擋住按鈕
+  var topRects = [];
+  function measureTop() {
+    topRects = ["title", "stamps"].map(function (id) { var r = $(id) && $(id).getBoundingClientRect(); return r; }).filter(Boolean);
+  }
+  addEventListener("resize", measureTop);
+  measureTop();
+  var projV = new THREE.Vector3();
+  function fadeUnderTop(sp) {
+    projV.copy(sp.position).project(camera);
+    var x = (projV.x + 1) / 2 * innerWidth, y = (1 - projV.y) / 2 * innerHeight, hit = false;
+    topRects.forEach(function (r) { if (x > r.left - 60 && x < r.right + 60 && y < r.bottom + 30) hit = true; });
+    sp.material.opacity += ((hit ? 0.18 : 1) - sp.material.opacity) * 0.2;
+  }
 
   /* ---------- 主迴圈 ---------- */
   var clock = new THREE.Clock();
@@ -1939,18 +1986,30 @@
       var bounce = (k === n && !walking) ? Math.abs(Math.sin(time * 3)) * 0.6 : 0;
       sg.sprite.position.y = sg.sprite.userData.baseY + bounce;
       sg.sprite.scale.set(6.6 * sc, 2.27 * sc, 1);
-      if (ST[k].noBuilding) sg.sprite.visible = n === k || k === state.at || !!state.visited[ST[k].id];
+      var show = camMode === "overview" || (k === state.at && !walking && !cardOpen());
+      sg.sprite.visible = show;
+      if (show) fadeUnderTop(sg.sprite);
+      if (sg.photo) { sg.photo.visible = show; if (show) fadeUnderTop(sg.photo); }
     });
     ring.scale.setScalar(1 + Math.sin(time * 3) * 0.08);
-    centerPick.forEach(function (cs) { var k2 = camMode === "overview" ? 1.6 : 1; cs.scale.set(6 * k2, 2.8 * k2, 1); });
-    // 跟拍：走路時鏡頭慢慢轉到小隊後面（手指按著畫面時不搶）
-    if (walking && camMode === "follow" && !Object.keys(pointers).length && !(tour.on && tour.paused)) {
-      var behind = angTo(yaw, kid.rotation.y + Math.PI);
-      yaw += (behind - yaw) * (1 - Math.pow(0.35, dt));
+    centerPick.forEach(function (cs) { cs.scale.set(6 * 1.6, 2.8 * 1.6, 1); cs.visible = camMode === "overview"; });
+    // 跟拍：鏡頭跟著小隊走，方向照走路的進度，從出發那一站的正面慢慢轉到下一站的正面。
+    // 整段路只轉一次、速度平均，到站時已經面對建築，不用再大轉；路上轉彎也不跟著甩（手指按著畫面時不搶）
+    if (walking && camMode === "follow" && !Object.keys(pointers).length) {
+      var span = Math.abs(walkTarget - camWalk.s0), prog = span > 0 ? Math.min(1, Math.abs(walkS - camWalk.s0) / span) : 1;
+      prog = prog * prog * (3 - 2 * prog);
+      yaw = camWalk.from + (camWalk.to - camWalk.from) * prog;
     }
-    yawView += (angTo(yawView, yaw) - yawView) * (1 - Math.pow(0.08, dt));
+    // 鏡頭轉的速度：先快後慢，而且每秒最多轉 CAM_TURN（弧度），大轉彎才不會頭暈
+    var turn = (angTo(yawView, yaw) - yawView) * (1 - Math.pow(0.1, dt));
+    var cap = (camMode === "overview" ? 2 : 1) * CAM_TURN * dt; // 切到全圖時鏡頭同時拉遠，轉快一點也不會暈
+    yawView += Math.max(-cap, Math.min(cap, turn));
+    // 打開卡片時畫面往旁邊推，也慢慢推過去
+    var offWant = document.body.classList.contains("carded") ? 1 : 0;
+    if (Math.abs(offNow - offWant) > 0.002) { offNow += (offWant - offNow) * (1 - Math.pow(0.03, dt)); applyOffset(); }
+    else if (offNow !== offWant) { offNow = offWant; applyOffset(); }
     var c = desiredCam();
-    var lerp = first ? 1 : 1 - Math.pow(0.02, dt);
+    var lerp = first ? 1 : 1 - Math.pow(0.05, dt);
     first = false;
     camTarget.lerp(c.tgt, lerp);
     camPos.lerp(c.pos, lerp);

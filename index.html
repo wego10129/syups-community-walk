@@ -122,6 +122,8 @@
   .block.learn.open small { display: none; }
   .rules ol { margin: .1rem 0 0; padding-left: 1.5em; font-size: 1.2rem; }
   .foot { display: flex; gap: .6rem; margin-top: auto; padding-top: .3rem; flex-wrap: wrap; }
+  /* 卡片內容很長（有照片）時，「下一站」按鈕還是固定在卡片底部，不用捲下去找 */
+  .foot { position: sticky; bottom: -1rem; margin-bottom: -1rem; padding-bottom: 1rem; background: #F7F4EC; z-index: 1; }
   .btn { flex: 1; background: var(--sun); border: 3px solid var(--line); box-shadow: 3px 3px 0 var(--line); border-radius: 14px; padding: .55rem .9rem; font-size: 1.2rem; white-space: nowrap; }
   .btn.gray { background: #fff; flex: none; }
   .btn:active { transform: translate(2px, 2px); box-shadow: 1px 1px 0 var(--line); }
