@@ -140,6 +140,15 @@
   .check { display: flex; gap: .5rem; align-items: flex-start; background: #FEF9C3; border-radius: 12px; padding: .5rem .7rem; margin: .6rem 0; font-size: 1rem; line-height: 1.5; }
   .check input { width: 1.3rem; height: 1.3rem; flex: none; margin-top: .1rem; }
   .row { display: flex; gap: .6rem; }
+  /* 家長分享影片：做的時候蓋住整個畫面（後面的 3D 畫面暫時改成影片尺寸） */
+  #film { position: fixed; inset: 0; background: rgba(27, 40, 54, .92); display: none; align-items: center; justify-content: center; z-index: 40; padding: 1rem; }
+  #film.show { display: flex; }
+  #filmBox { position: relative; width: min(36rem, 100%); max-height: 96vh; overflow-y: auto; border-radius: 22px; padding: 1rem 1.2rem; }
+  #filmBox .x { position: absolute; top: .7rem; right: .7rem; }
+  #filmBox h3 { margin: .3rem 0 .4rem; font-size: 1.4rem; }
+  .filmPrev { display: block; width: 100%; max-height: 60vh; aspect-ratio: 1; object-fit: contain; background: #000; border-radius: 12px; border: 3px solid var(--line); margin: .5rem 0; }
+  .filmProg { height: 14px; background: #eadfce; border-radius: 7px; overflow: hidden; margin: .4rem 0 .8rem; }
+  #filmBar { height: 100%; width: 0; background: var(--accent); }
   .out { margin-top: .8rem; display: flex; flex-direction: column; gap: .6rem; }
   .out img { width: 100%; border-radius: 12px; border: 3px solid var(--line); }
 
@@ -190,6 +199,7 @@
 
 <div id="card"><div id="sheet"></div></div>
 <div id="share"><div id="shareBox" class="pop"></div></div>
+<div id="film"><div id="filmBox" class="pop"></div></div>
 <div id="toast"></div>
 <div id="err">這台裝置無法顯示 3D 畫面（WebGL）。<br>請改用較新的瀏覽器開啟。</div>
 

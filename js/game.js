@@ -1014,7 +1014,16 @@
     c.closePath();
   }
   function drawSign(k) {
-    var sg = signs[k], c = sg.ctx, W = 640, H = 220;
+    var sg = signs[k], c = sg.ctx, H = 220;
+    // 名字長的站牌加寬（最寬 1200），字就不用縮小
+    var need = Math.round(60 * 1.3 + zyMeasure(c, ST[k].name, 60) + 90), Wn = Math.max(640, Math.min(1200, need));
+    if (c.canvas.width !== Wn) {
+      c.canvas.width = Wn;
+      sg.tex.dispose(); // 換尺寸要換新的貼圖
+      sg.tex = new THREE.CanvasTexture(c.canvas); sg.tex.encoding = THREE.sRGBEncoding;
+      sg.sprite.material.map = sg.tex; sg.sprite.material.needsUpdate = true;
+    }
+    var W = c.canvas.width;
     var st = stationStatus(k);
     c.clearRect(0, 0, W, H);
     var bg = { locked: "#ece6dc", next: "#ffe58a", here: "#ffd2b8", done: "#cfeeda" }[st];
@@ -1291,8 +1300,7 @@
     closeMenu();
     walkTarget = cum[ST[k].at];
     walking = true;
-    var f = frontYaw(k);
-    camWalk = { from: yawView, to: f == null ? yawView : angTo(yawView, f), s0: walkS };
+    camWalk = { from: yawView, to: angTo(yawView, BASE_YAW), s0: walkS };
     state.at = k;
     arriveCb = cb;
     camMode = "follow";
@@ -1304,7 +1312,9 @@
   var camMode = "follow";
   var yaw = 0.5, pitch = 1.0, dist = 30;
   var yawView = yaw;
-  var CAM_TURN = 0.9;  // 鏡頭每秒最多轉幾弧度（0.9 ≈ 每秒 50 度）
+  var CAM_TURN = 0.6;  // 鏡頭每秒最多轉幾弧度（0.6 ≈ 每秒 35 度）
+  var BASE_YAW = 0.5;  // 鏡頭平常的方向（北邊在上面，像看地圖），走路時固定這個方向
+  var FACE_MAX = 0.79; // 到站時為了看到建築正面，最多偏離平常方向幾弧度（0.79 ≈ 45 度）
   var camWalk = { from: yaw, to: yaw, s0: 0 }; // 這一段路鏡頭從哪個角度轉到哪個角度 // 畫面上真正用的角度：慢慢追上 yaw，鏡頭才會繞著轉，不會一下子跳過去
   function angTo(a, b) { return a + Math.atan2(Math.sin(b - a), Math.cos(b - a)); } // b 換成離 a 最近的同一個角度
   var camTarget = new THREE.Vector3(), camPos = new THREE.Vector3();
@@ -1453,7 +1463,7 @@
   $("viewBtn").onclick = function () {
     if (cardOpen()) closeCard();
     camMode = camMode === "overview" ? "follow" : "overview";
-    if (camMode === "overview") yaw = angTo(yawView, 0.5); // 全圖固定北邊在上面，不管剛剛面對哪一站
+    if (camMode === "overview") yaw = angTo(yawView, BASE_YAW); // 全圖固定北邊在上面，不管剛剛面對哪一站
     $("viewBtn").classList.toggle("on", camMode === "overview");
   };
   $("menuBtn").onclick = function () { $("menu").classList.toggle("show"); };
@@ -1522,7 +1532,12 @@
   /* ---------- 地點卡：照片在右邊，3D 在左邊 ---------- */
   var card = $("card"), sheet = $("sheet"), showIdx = 0;
   // 到站時鏡頭轉到建築正面（建築照真實位置朝向馬路，有些背對預設鏡頭）
-  function frontYaw(k) { return (ST[k].noBuilding || !buildings[k]) ? null : buildings[k].rotation.y + 0.45; }
+  // 到站時鏡頭的方向：平常方向往建築正面偏一點，最多 FACE_MAX；沒有建築就用平常方向
+  function frontYaw(k) {
+    if (ST[k].noBuilding || !buildings[k]) return BASE_YAW;
+    var f = buildings[k].rotation.y + 0.45, d = Math.atan2(Math.sin(f - BASE_YAW), Math.cos(f - BASE_YAW));
+    return BASE_YAW + Math.max(-FACE_MAX, Math.min(FACE_MAX, d));
+  }
   function faceStation(k) {
     var f = frontYaw(k);
     if (f != null) yaw = angTo(yawView, f); // 取最接近現在的角度，不要轉一大圈；yawView 會慢慢繞過去
@@ -1839,16 +1854,22 @@
     box.innerHTML = "";
     var sx = el("button", "x", "✕"); sx.setAttribute("aria-label", "關閉"); sx.onclick = closeShare;
     box.appendChild(sx);
-    box.appendChild(el("h3", "", "家長分享圖"));
-    box.appendChild(el("p", "note", "把今天走過的地圖、每一站的照片和學到的事，做成一張長圖，直接傳到班級 LINE 群組。" +
+    box.appendChild(el("h3", "", "家長分享圖／影片"));
+    box.appendChild(el("p", "note", "分享圖：把地圖、每一站的照片和學到的事，做成一張長圖。分享影片：小隊在 3D 地圖上走一圈，路線一段一段畫出來，到站時照片彈出來。都可以直接傳到班級 LINE 群組。" +
       (have ? "目前有 " + have + " 站放了照片。" : "<b>還沒有放照片</b>：在每一站的卡片上點「放照片」。")));
     var lb = el("label", "check", '<input type="checkbox" id="shareOk"> 我確認照片只拍到背影，沒有拍到臉、名牌、書包或水壺上的名字');
     box.appendChild(lb);
     var row = el("div", "row");
     var mk = el("button", "btn", "做分享圖");
+    var mv = el("button", "btn", "做分享影片（約 " + filmLength() + " 秒）");
     var cl = el("button", "btn gray", "關閉");
     cl.onclick = closeShare;
-    row.appendChild(mk); row.appendChild(cl);
+    mv.onclick = function () {
+      if (!$("shareOk").checked) { toast(ART.think(), "請先勾選確認：照片只拍到背影。"); return; }
+      closeShare(); startFilm();
+    };
+    row.style.flexWrap = "wrap";
+    row.appendChild(mk); row.appendChild(mv); row.appendChild(cl);
     box.appendChild(row);
     var out = el("div", "out");
     box.appendChild(out);
@@ -1879,35 +1900,327 @@
     if (tour.on && e.code === "Space" && tag !== "INPUT" && tag !== "BUTTON") { e.preventDefault(); $("tourPause").click(); return; }
     if (tour.on && (e.key === "h" || e.key === "H")) { document.body.classList.toggle("capture"); return; }
     if (e.key !== "Escape") return;
-    if ($("intro").classList.contains("show")) closeIntro();
+    if ($("film").classList.contains("show")) { if (!film.on) closeFilm(); }
+    else if ($("intro").classList.contains("show")) closeIntro();
     else if (tour.on) { stopTour(); closeCard(); }
     else if ($("share").classList.contains("show")) closeShare();
     else if (cardOpen()) closeCard();
     else closeMenu();
   });
   function givePoster(cv) {
-    var d = new Date(), fname = "community-walk-" + (d.getMonth() + 1) + "-" + d.getDate() + ".jpg";
+    if (cv._blob) giveFile(cv._blob, "jpg", "圖片"); else cv.toBlob(function (b) { giveFile(b, "jpg", "圖片"); }, "image/jpeg", 0.88);
+  }
+  // 分享到 LINE（手機、iPad 的分享選單），不能分享就下載
+  function giveFile(blob, ext, what) {
+    var d = new Date(), fname = "community-walk-" + (d.getMonth() + 1) + "-" + d.getDate() + "." + ext;
     function download(blob) {
       try {
         var a = document.createElement("a");
         a.href = URL.createObjectURL(blob); a.download = fname;
         document.body.appendChild(a); a.click(); a.remove();
-        toast(ART.check(), "已經存成圖片，可以傳到班級群組了。");
-      } catch (e) { toast(ART.think(), "這台裝置不能存檔，可以長按上面的圖片儲存。"); }
+        toast(ART.check(), "已經存成" + what + "，可以傳到班級群組了。");
+      } catch (e) { toast(ART.think(), "這台裝置不能存檔，可以長按上面的" + what + "儲存。"); }
     }
-    function give(blob) {
-      if (!blob) { toast(ART.think(), "這台裝置不能存檔，可以長按上面的圖片儲存。"); return; }
-      var file = null;
-      try { file = new File([blob], fname, { type: "image/jpeg" }); } catch (e) {}
-      if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        navigator.share({ files: [file] }).catch(function (err) { if (!err || err.name !== "AbortError") download(blob); });
-      } else download(blob);
-    }
-    if (cv._blob) give(cv._blob); else cv.toBlob(give, "image/jpeg", 0.88);
+    if (!blob) { toast(ART.think(), "這台裝置不能存檔，可以長按上面的" + what + "儲存。"); return; }
+    var file = null;
+    try { file = new File([blob], fname, { type: blob.type }); } catch (e) {}
+    if (file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file] }).catch(function (err) { if (!err || err.name !== "AbortError") download(blob); });
+    } else download(blob);
   }
+
+  /* ---------- 家長分享影片（像 Relive 那樣的 3D 飛行影片） ----------
+   * 直接錄這張 3D 地圖：先看全圖和標題 → 小隊一站一站走，路線一段一段畫出來 → 到站時照片彈出來 →
+   * 最後回到全圖「我們走過 N 個地方」。在老師的電腦上做好，下載或傳到 LINE，照片不會上傳到網路。
+   * 時間長短：FILM_SPEED（走路速度）、FILM.intro／photo／empty／outro（秒）。 */
+  var FILM_W = 1080, FILM_H = 1080, FILM_SPEED = 16;
+  var FILM = { intro: 3.5, arrive: 1.0, photo: 2.4, empty: 1.8, outro: 5 };
+  var FONT = "'PingFang TC','Microsoft JhengHei','Noto Sans TC',sans-serif";
+  var film = { on: false };
+  // 路線的彩帶：沿著路線鋪一條橘色的帶子，影片裡一段一段畫出來
+  var ribbon = (function () {
+    var STEP = 0.4, n = Math.ceil(total / STEP), pos = [];
+    for (var j = 0; j < n; j++) {
+      var a = pointAt(j * STEP), b = pointAt(Math.min(total, (j + 1) * STEP));
+      var nx = -a.d.z * 0.45, nz = a.d.x * 0.45, y = 0.16;
+      var A = [a.p.x + nx, y, a.p.z + nz], B = [a.p.x - nx, y, a.p.z - nz], C = [b.p.x + nx, y, b.p.z + nz], D = [b.p.x - nx, y, b.p.z - nz];
+      pos.push.apply(pos, A.concat(B, C, B, D, C));
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    var m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xe8704a, side: THREE.DoubleSide, toneMapped: false }));
+    m.userData.step = STEP;
+    m.visible = false;
+    m.renderOrder = 2;
+    scene.add(m);
+    return m;
+  })();
+  function showRibbon(s) { ribbon.geometry.setDrawRange(0, Math.max(0, Math.floor(s / ribbon.userData.step)) * 6); }
+
+  function filmLength() {
+    var t = FILM.intro + FILM.outro;
+    ST.forEach(function (stn, k) {
+      if (k > 0) t += (cum[stn.at] - cum[ST[k - 1].at]) / FILM_SPEED + 0.25;
+      var n = (photos[stn.id] || []).length;
+      t += FILM.arrive + (n ? n * FILM.photo : FILM.empty);
+    });
+    return Math.round(t);
+  }
+  function pickMime() {
+    if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) return null;
+    var list = ["video/mp4;codecs=avc1.42E01F", "video/mp4", "video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
+    for (var j = 0; j < list.length; j++) { try { if (MediaRecorder.isTypeSupported(list[j])) return list[j]; } catch (e) {} }
+    return null;
+  }
+
+  function startFilm() {
+    var mime = pickMime();
+    if (!mime) { filmError("這台電腦的瀏覽器不能錄影片。請用電腦上的 Chrome，或 iPad 的 Safari 再試一次。"); return; }
+    making = true;
+    var urls = [];
+    ST.forEach(function (stn, k) { (photos[stn.id] || []).forEach(function (u, j) { urls.push([k, j, u]); }); });
+    Promise.all(urls.map(function (x) { return loadImg(x[2]).then(function (im) { return [x[0], x[1], im]; }); })).then(function (got) {
+      var imgs = ST.map(function () { return []; });
+      got.forEach(function (x) { if (x[2]) imgs[x[0]][x[1]] = x[2]; });
+      imgs = imgs.map(function (l) { return l.filter(Boolean); });
+      if (tour.on) stopTour();
+      if (cardOpen()) closeCard();
+      closeMenu();
+      var cv = document.createElement("canvas");
+      cv.width = FILM_W; cv.height = FILM_H;
+      film = {
+        on: true, cv: cv, c: cv.getContext("2d"), imgs: imgs, k: 0, phase: "intro", t: 0, T: 0, len: filmLength(),
+        keep: { s: walkS, yaw: yaw, yawView: yawView, camMode: camMode }, chunks: [], mime: mime, cancelled: false
+      };
+      filmBox("making");
+      camMode = "follow";
+      offNow = 0;
+      renderer.setSize(FILM_W, FILM_H, false);
+      camera.clearViewOffset();
+      camera.aspect = FILM_W / FILM_H; camera.fov = 45; camera.updateProjectionMatrix();
+      walkS = walkTarget = cum[ST[0].at]; walking = false; arriveCb = null;
+      ribbon.visible = true; showRibbon(0);
+      first = true; // 鏡頭直接跳到全圖，不從現在的位置飛過去
+      var stream = cv.captureStream(30);
+      var rec;
+      try { rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000 }); }
+      catch (e) { endFilm(); filmError("這台電腦不能錄影片（" + e.message + "）。請用電腦上的 Chrome 再試一次。"); return; }
+      film.rec = rec;
+      rec.ondataavailable = function (e) { if (e.data && e.data.size) film.chunks.push(e.data); };
+      rec.onstop = function () {
+        var f = film;
+        if (f.cancelled) return;
+        var blob = new Blob(f.chunks, { type: f.mime.split(";")[0] });
+        filmBox("done", blob);
+      };
+      rec.start(1000);
+    });
+  }
+  function endFilm() {
+    var k = film.keep;
+    film.on = false;
+    making = false;
+    ribbon.visible = false;
+    walking = false; arriveCb = null;
+    if (k) { walkS = walkTarget = k.s; yaw = k.yaw; yawView = k.yawView; camMode = k.camMode; }
+    first = true;
+    onResize();
+    refresh();
+  }
+  function cancelFilm() {
+    if (!film.on) return;
+    film.cancelled = true;
+    try { film.rec.stop(); } catch (e) {}
+    endFilm();
+    closeFilm();
+  }
+
+  // 每一幀：照時間表推進（開場 → 走路 → 到站看照片 → … → 結尾）
+  function filmTick(dt) {
+    var f = film;
+    f.t += dt; f.T += dt;
+    if (f.phase === "intro" && f.t > FILM.intro) { f.phase = "arrive"; f.t = 0; }
+    else if (f.phase === "arrive") {
+      var n = f.imgs[f.k].length, stay = FILM.arrive + (n ? n * FILM.photo : FILM.empty);
+      if (f.t > stay) {
+        if (f.k + 1 >= ST.length) { f.phase = "outro"; f.t = 0; }
+        else {
+          f.k++; f.phase = "walk"; f.t = 0;
+          walkTarget = cum[ST[f.k].at]; walking = true;
+          arriveCb = function () { if (film.on) { film.phase = "arrive"; film.t = 0; } };
+        }
+      }
+    } else if (f.phase === "outro" && f.t > FILM.outro) {
+      f.phase = "end";
+      try { f.rec.stop(); } catch (e) {}
+      endFilm();
+      return;
+    }
+    showRibbon(walkS);
+    var bar = $("filmBar");
+    if (bar) bar.style.width = Math.min(100, f.T / f.len * 100) + "%";
+  }
+  // 影片裡的鏡頭：開場、結尾看全圖；走路時在小隊斜後上方（方向固定）；到站時拉近、看建築正面
+  function filmCam() {
+    var tgt, d, py = 1.0, yw = BASE_YAW;
+    if (film.phase === "intro" || film.phase === "outro" || film.phase === "end") { tgt = new THREE.Vector3(-2, 0, -6); d = 108; py = 1.05; }
+    else if (film.phase === "walk") { tgt = kid.position.clone(); d = 40; }
+    else {
+      var s = ST[film.k];
+      tgt = new THREE.Vector3((s.pos[0] + kid.position.x) / 2, 2, (s.pos[1] + kid.position.z) / 2);
+      d = 30; yw = frontYaw(film.k);
+    }
+    return { tgt: tgt, pos: new THREE.Vector3(tgt.x + Math.sin(yw) * Math.cos(py) * d, Math.sin(py) * d, tgt.z + Math.cos(yw) * Math.cos(py) * d) };
+  }
+  function ease(x) { x = Math.max(0, Math.min(1, x)); return 1 - Math.pow(1 - x, 3); }
+  function pill(c, x, y, w, h, fill, line) {
+    roundRect(c, x, y, w, h, h / 2); c.fillStyle = fill; c.fill();
+    if (line) { c.lineWidth = 5; c.strokeStyle = line; c.stroke(); }
+  }
+  // 每一幀：把 3D 畫面和文字、照片畫到影片的畫布上
+  function filmFrame() {
+    var f = film, c = f.c, W = FILM_W, H = FILM_H, INK = "#3b2f2a";
+    c.drawImage(renderer.domElement, 0, 0, W, H);
+    c.textBaseline = "middle"; c.textAlign = "left";
+    // 左上角：標題
+    if (f.phase !== "intro") {
+      c.font = "bold 34px " + FONT;
+      var tw = c.measureText(TOUR.title).width;
+      pill(c, 28, 28, tw + 56, 66, "rgba(255,250,240,.92)", INK);
+      c.fillStyle = INK; c.fillText(TOUR.title, 56, 62);
+    }
+    if (f.phase === "intro" || f.phase === "outro" || f.phase === "end") {
+      var a = f.phase === "intro" ? ease(f.t / 0.6) * (1 - ease((f.t - FILM.intro + 0.5) / 0.5)) : ease(f.t / 0.8);
+      c.save(); c.globalAlpha = a;
+      var bw = 860, bh = f.phase === "intro" ? 300 : 480, bx = (W - bw) / 2, by = (H - bh) / 2 - 40;
+      roundRect(c, bx, by, bw, bh, 36); c.fillStyle = "rgba(255,250,240,.95)"; c.fill();
+      c.lineWidth = 6; c.strokeStyle = INK; c.stroke();
+      c.textAlign = "center"; c.fillStyle = INK;
+      if (f.phase === "intro") {
+        var dd = new Date();
+        c.font = "bold 76px " + FONT; c.fillText(TOUR.title, W / 2, by + 105);
+        c.font = "38px " + FONT; c.fillStyle = "#7a6656";
+        c.fillText((TOUR.subtitle || "") + "　" + (dd.getMonth() + 1) + "月" + dd.getDate() + "日", W / 2, by + 185);
+        c.fillStyle = "#e8704a"; c.font = "bold 40px " + FONT; c.fillText("出發！", W / 2, by + 245);
+      } else {
+        c.font = "bold 64px " + FONT; c.fillText("我們走過 " + ST.length + " 個地方！", W / 2, by + 85);
+        var per = Math.min(ST.length, 5), sz = 110, gap = 30, rows = Math.ceil(ST.length / per);
+        ST.forEach(function (stn, k) {
+          var r = Math.floor(k / per), inRow = Math.min(per, ST.length - r * per), col = k - r * per;
+          var x0 = W / 2 - (inRow * sz + (inRow - 1) * gap) / 2 + col * (sz + gap), y0 = by + 140 + r * (sz + 20);
+          var pop = ease((f.t - 0.3 - k * 0.12) / 0.3);
+          if (pop <= 0) return;
+          c.save(); c.translate(x0 + sz / 2, y0 + sz / 2); c.scale(pop, pop);
+          c.beginPath(); c.arc(0, 0, sz / 2, 0, Math.PI * 2); c.fillStyle = "#cfeeda"; c.fill();
+          c.lineWidth = 5; c.strokeStyle = "#3f9b5f"; c.stroke();
+          var ic = signs[k] && signs[k].icon;
+          if (ic && ic.complete && ic.naturalWidth) c.drawImage(ic, -sz * 0.32, -sz * 0.32, sz * 0.64, sz * 0.64);
+          c.restore();
+        });
+        c.font = "26px " + FONT; c.fillStyle = "#7a6656";
+        c.fillText("照片只拍孩子的背影。請只分享在班級群組，不要轉貼到公開的地方。", W / 2, by + bh - 40);
+      }
+      c.restore();
+      return;
+    }
+    var stn = ST[f.k];
+    if (f.phase === "walk") {
+      // 下方：要去哪裡
+      c.font = "bold 40px " + FONT;
+      var lb = "前往第 " + (f.k + 1) + " 站：" + stn.name, lw = c.measureText(lb).width;
+      pill(c, (W - lw) / 2 - 40, H - 120, lw + 80, 76, "rgba(255,250,240,.92)", INK);
+      c.fillStyle = INK; c.textAlign = "center"; c.fillText(lb, W / 2, H - 82);
+      return;
+    }
+    // 到站：下方站名橫幅、上方照片一張一張彈出來
+    var inA = ease(f.t / 0.5);
+    c.save(); c.globalAlpha = inA;
+    c.font = "bold 58px " + FONT;
+    var nw = c.measureText(stn.name).width, bw2 = nw + 220, bx2 = (W - bw2) / 2, by2 = H - 150 + (1 - inA) * 40;
+    pill(c, bx2, by2, bw2, 104, "#ffd2b8", "#e8704a");
+    c.beginPath(); c.arc(bx2 + 62, by2 + 52, 36, 0, Math.PI * 2); c.fillStyle = "#e8704a"; c.fill();
+    c.fillStyle = "#fff"; c.font = "bold 38px " + FONT; c.textAlign = "center"; c.fillText(String(f.k + 1), bx2 + 62, by2 + 54);
+    var ic2 = signs[f.k] && signs[f.k].icon;
+    if (ic2 && ic2.complete && ic2.naturalWidth) c.drawImage(ic2, bx2 + 108, by2 + 22, 60, 60);
+    c.fillStyle = INK; c.font = "bold 58px " + FONT; c.textAlign = "left"; c.fillText(stn.name, bx2 + 180, by2 + 55);
+    c.restore();
+    var list = f.imgs[f.k];
+    if (!list.length) return;
+    var pt = f.t - FILM.arrive * 0.6, j = Math.min(list.length - 1, Math.floor(pt / FILM.photo));
+    if (pt < 0) return;
+    var lt = pt - j * FILM.photo, im = list[j];
+    var pw = 760, ph = Math.round(Math.max(380, Math.min(560, pw * im.height / im.width)));
+    var sc2 = 0.6 + 0.4 * ease(lt / 0.35), tilt = (j % 2 ? 1 : -1) * 0.03;
+    var out = j < list.length - 1 ? ease((lt - FILM.photo + 0.3) / 0.3) : 0;
+    c.save();
+    c.globalAlpha = Math.min(1, lt / 0.2) * (1 - out);
+    c.translate(W / 2, 130 + ph / 2 + 20); c.rotate(tilt); c.scale(sc2, sc2);
+    c.shadowColor = "rgba(0,0,0,.35)"; c.shadowBlur = 30; c.shadowOffsetY = 10;
+    roundRect(c, -pw / 2 - 18, -ph / 2 - 18, pw + 36, ph + 36, 24); c.fillStyle = "#fffaf0"; c.fill();
+    c.shadowColor = "transparent";
+    coverDraw(c, im, -pw / 2, -ph / 2, pw, ph, 14);
+    c.restore();
+  }
+
+  // 影片的視窗：做的時候看預覽和進度（只能按「取消」）；做好後播放、傳到 LINE 或下載
+  function filmBox(mode, blob) {
+    var box = $("filmBox");
+    box.innerHTML = "";
+    if (mode === "making") {
+      box.appendChild(el("h3", "", "正在做家長分享影片…"));
+      box.appendChild(el("p", "note", "大約 " + film.len + " 秒。做的時候<b>不要切換視窗或關掉網頁</b>，影片才不會中斷。"));
+      film.cv.className = "filmPrev";
+      box.appendChild(film.cv);
+      var pb = el("div", "filmProg", '<div id="filmBar"></div>');
+      box.appendChild(pb);
+      var row = el("div", "row");
+      var cc = el("button", "btn gray", "取消");
+      cc.onclick = cancelFilm;
+      row.appendChild(cc);
+      box.appendChild(row);
+    } else {
+      var x = el("button", "x", "✕"); x.setAttribute("aria-label", "關閉"); x.onclick = closeFilm;
+      box.appendChild(x);
+      box.appendChild(el("h3", "", "家長分享影片做好了"));
+      var v = document.createElement("video");
+      v.controls = true; v.playsInline = true; v.src = URL.createObjectURL(blob); v.className = "filmPrev";
+      box.appendChild(v);
+      var webm = /webm/.test(blob.type);
+      if (webm) box.appendChild(el("p", "note", "這台電腦做出來的是 WebM 格式，iPhone 可能播不了。要給家長看，建議改用 iPad 的 Safari 或新版 Chrome 做（會是 MP4）。"));
+      var row2 = el("div", "row");
+      var g = el("button", "btn", "傳到 LINE（分享）／下載");
+      g.onclick = function () { giveFile(blob, webm ? "webm" : "mp4", "影片"); };
+      var cl = el("button", "btn gray", "關閉");
+      cl.onclick = closeFilm;
+      row2.appendChild(g); row2.appendChild(cl);
+      box.appendChild(row2);
+    }
+    $("film").classList.add("show");
+  }
+  function closeFilm() {
+    if (film.on) return; // 做影片中只能按「取消」
+    var v = $("filmBox").querySelector("video");
+    if (v) { v.pause(); }
+    $("film").classList.remove("show");
+  }
+  function filmError(msg) {
+    var box = $("filmBox");
+    box.innerHTML = "";
+    var x = el("button", "x", "✕"); x.setAttribute("aria-label", "關閉"); x.onclick = closeFilm;
+    box.appendChild(x);
+    box.appendChild(el("h3", "", "沒辦法做影片"));
+    box.appendChild(el("p", "note", msg));
+    $("film").classList.add("show");
+  }
+  $("film").addEventListener("click", function (e) { if (e.target === $("film")) closeFilm(); });
+  // 影片不能在背景錄：切到別的分頁時提醒
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden && film.on) toast(ART.think(), "做影片時請留在這個畫面，不然影片會停住。");
+  });
 
   /* ---------- 畫面大小 ---------- */
   function onResize() {
+    if (film.on) return; // 做影片時畫面固定 1080×1080
     renderer.setSize(innerWidth, innerHeight, false);
     camera.aspect = innerWidth / innerHeight;
     camera.fov = camera.aspect < 1 ? 58 : 45;
@@ -1948,8 +2261,9 @@
     var dt = Math.min(clock.getDelta(), 0.05);
     var time = clock.elapsedTime;
     tourTick(dt);
+    if (film.on) filmTick(dt);
     if (walking && !(tour.on && tour.paused)) {
-      var step = 9 * dt;
+      var step = (film.on ? FILM_SPEED : 9) * dt;
       if (Math.abs(walkTarget - walkS) <= step) {
         walkS = walkTarget;
         walking = false;
@@ -1981,22 +2295,24 @@
       wk.obj.rotation.y = Math.atan2(d.x, d.z);
     });
     var n = nextIndex();
-    var sc = camMode === "overview" ? 1.3 : 0.9; // 全圖時站牌縮小一點，才不會擠在一起
+    // 全圖時站牌放大（畫面越窄鏡頭拉越遠，站牌也跟著放大），名字才看得清楚
+    var sc = camMode === "overview" ? 1.6 * Math.max(1, Math.min(1.7, 1.75 / camera.aspect)) : 0.9;
     signs.forEach(function (sg, k) {
       var bounce = (k === n && !walking) ? Math.abs(Math.sin(time * 3)) * 0.6 : 0;
       sg.sprite.position.y = sg.sprite.userData.baseY + bounce;
-      sg.sprite.scale.set(6.6 * sc, 2.27 * sc, 1);
-      var show = camMode === "overview" || (k === state.at && !walking && !cardOpen());
+      sg.sprite.scale.set(6.6 * sc * sg.ctx.canvas.width / 640, 2.27 * sc, 1);
+      var show = !film.on && (camMode === "overview" || (k === state.at && !walking && !cardOpen()));
       sg.sprite.visible = show;
       if (show) fadeUnderTop(sg.sprite);
       if (sg.photo) { sg.photo.visible = show; if (show) fadeUnderTop(sg.photo); }
     });
     ring.scale.setScalar(1 + Math.sin(time * 3) * 0.08);
-    centerPick.forEach(function (cs) { cs.scale.set(6 * 1.6, 2.8 * 1.6, 1); cs.visible = camMode === "overview"; });
-    // 跟拍：鏡頭跟著小隊走，方向照走路的進度，從出發那一站的正面慢慢轉到下一站的正面。
-    // 整段路只轉一次、速度平均，到站時已經面對建築，不用再大轉；路上轉彎也不跟著甩（手指按著畫面時不搶）
-    if (walking && camMode === "follow" && !Object.keys(pointers).length) {
-      var span = Math.abs(walkTarget - camWalk.s0), prog = span > 0 ? Math.min(1, Math.abs(walkS - camWalk.s0) / span) : 1;
+    centerPick.forEach(function (cs) { cs.scale.set(6 * 1.6, 2.8 * 1.6, 1); cs.visible = camMode === "overview" && !film.on; });
+    if (film.on) ring.visible = false;
+    // 跟拍：鏡頭跟著小隊走，方向固定（北邊在上面）。剛出發的前 40% 路程，從上一站的小角度慢慢回正，
+    // 之後就不轉；到站時再小小轉一點看建築正面（faceStation，最多 45 度）。路上轉彎不跟著甩（手指按著畫面時不搶）
+    if (walking && !film.on && camMode === "follow" && !Object.keys(pointers).length) {
+      var span = Math.abs(walkTarget - camWalk.s0), prog = span > 0 ? Math.min(1, Math.abs(walkS - camWalk.s0) / span / 0.4) : 1;
       prog = prog * prog * (3 - 2 * prog);
       yaw = camWalk.from + (camWalk.to - camWalk.from) * prog;
     }
@@ -2008,14 +2324,15 @@
     var offWant = document.body.classList.contains("carded") ? 1 : 0;
     if (Math.abs(offNow - offWant) > 0.002) { offNow += (offWant - offNow) * (1 - Math.pow(0.03, dt)); applyOffset(); }
     else if (offNow !== offWant) { offNow = offWant; applyOffset(); }
-    var c = desiredCam();
-    var lerp = first ? 1 : 1 - Math.pow(0.05, dt);
+    var c = film.on ? filmCam() : desiredCam();
+    var lerp = first ? 1 : 1 - Math.pow(film.on ? 0.15 : 0.05, dt);
     first = false;
     camTarget.lerp(c.tgt, lerp);
     camPos.lerp(c.pos, lerp);
     camera.position.copy(camPos);
     camera.lookAt(camTarget);
     renderer.render(scene, camera);
+    if (film.on) filmFrame();
     requestAnimationFrame(loop);
   }
   // 陰影：建築、樹、人物投影；地面接收
